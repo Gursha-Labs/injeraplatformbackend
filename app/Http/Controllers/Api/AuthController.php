@@ -13,177 +13,165 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 
 class AuthController extends Controller
 {
     /**
-     * Register a new regular user
+     * OTP expiration window in minutes
      */
-    public function registerUser(Request $request)
-    {
-        $request->validate([
-            'username' => 'required|string|max:100|unique:users,username',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6|confirmed',
-            'first_name' => 'nullable|string|max:255',
-            'last_name' => 'nullable|string|max:255',
-            'phone_number' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
-            'city' => 'nullable|string|max:100',
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $user = User::create([
-                'username' => $request->username,
-                'email'    => $request->email,
-                'password' => Hash::make($request->password),
-                'type'     => 'user',
-            ]);
-
-            // Create user profile
-            UserProfile::create([
-                'user_id' => $user->id,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'phone_number' => $request->phone_number,
-                'country' => $request->country,
-                'city' => $request->city,
-            ]);
-
-            DB::commit();
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            return response()->json([
-                'message' => 'User registered successfully',
-                'user'    => [
-                    'id'       => $user->id,
-                    'username' => $user->username,
-                    'email'    => $user->email,
-                    'type'     => $user->type,
-                ],
-                'profile' => $user->fresh()->userProfile,
-                'token'   => $token,
-            ], 201);
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('User registration failed: ' . $e->getMessage());
-            return response()->json([
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
+    private int $otpTtlMinutes = 15;
     /**
-     * Register a new advertiser
+     * Unified registration with email OTP verification
      */
-    public function registerAdvertiser(Request $request)
-    {
-        $request->validate([
-            'username' => 'required|string|max:100|unique:users,username',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6|confirmed',
-            'company_name' => 'required|string|max:255',
-            'phone_number' => 'required|string|max:20',
-            'business_email' => 'nullable|email|max:255',
-            'website' => 'nullable|url|max:255',
-            'industry' => 'nullable|string|max:100',
-            'business_type' => 'required|in:individual,startup,small_business,enterprise',
-            'description' => 'nullable|string|max:1000',
-            'country' => 'required|string|max:100',
-            'city' => 'required|string|max:100',
-            'address' => 'nullable|string|max:255',
-        ]);
 
-        DB::beginTransaction();
-        try {
-            $user = User::create([
-                'username' => $request->username,
-                'email'    => $request->email,
-                'password' => Hash::make($request->password),
-                'type'     => 'advertiser',
-            ]);
-
-            // Create advertiser profile
-            AdvertiserProfile::create([
-                'user_id' => $user->id,
-                'company_name' => $request->company_name,
-                'phone_number' => $request->phone_number,
-                'business_email' => $request->business_email ?? $request->email,
-                'website' => $request->website,
-                'industry' => $request->industry,
-                'business_type' => $request->business_type,
-                'description' => $request->description,
-                'country' => $request->country,
-                'city' => $request->city,
-                'address' => $request->address,
-                'account_status' => 'pending', // Requires admin approval
-            ]);
-
-            DB::commit();
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            return response()->json([
-                'message' => 'Advertiser registered successfully. Your account is pending approval.',
-                'user'    => [
-                    'id'       => $user->id,
-                    'username' => $user->username,
-                    'email'    => $user->email,
-                    'type'     => $user->type,
-                ],
-                'profile' => $user->fresh()->advertiserProfile,
-                'token'   => $token,
-            ], 201);
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('Advertiser registration failed: ' . $e->getMessage());
-            return response()->json([
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Legacy register endpoint (backward compatibility)
-     */
     public function register(Request $request)
     {
         $request->validate([
-            'username' => 'required|string|max:100',
+            'username' => 'required|string|max:100|unique:users,username',
             'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'password' => 'required|string|min:6',
             'type'     => 'required|in:user,advertiser',
         ]);
 
-        if ($request->type === 'user') {
-            return $this->registerUser($request);
-        } else {
-            return $this->registerAdvertiser($request);
+        DB::beginTransaction();
+        try {
+            $user = User::create([
+                'username' => $request->username,
+                'email'    => strtolower(trim($request->email)),
+                'password' => Hash::make($request->password),
+                'type'     => $request->type,
+            ]);
+
+            if ($user->type === 'user') {
+                UserProfile::create(['user_id' => $user->id]);
+            } else {
+                AdvertiserProfile::create([
+                    'user_id' => $user->id,
+                    'company_name' => $request->username,
+                    'phone_number' => '',
+                    'country' => 'N/A',
+                    'city' => 'N/A',
+                    'account_status' => 'pending',
+                ]);
+            }
+
+            // Generate OTP
+            $otp = random_int(100000, 999999);
+            $expiresAt = now()->addMinutes($this->otpTtlMinutes);
+
+            DB::table('email_verification_tokens')->updateOrInsert(
+                ['email' => $user->email],
+                [
+                    'token'      => (string) $otp,
+                    'created_at' => now(),        // ← Always set
+                    'expires_at' => $expiresAt,   // ← For safety
+                ]
+            );
+
+            // Send email (non-blocking)
+            try {
+                Mail::send('emails.verify-otp', [
+                    'otp' => $otp,
+                    'username' => $user->username
+                ], function ($message) use ($user) {
+                    $message->to($user->email)
+                            ->subject('Verify Your Email - Injera Platform');
+                });
+            } catch (Exception $e) {
+                Log::error('Verification OTP email failed: ' . $e->getMessage());
+                // Do NOT fail registration
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Registration initiated. An OTP has been sent to your email to verify your account.',
+                'user'    => $user->only(['id', 'username', 'email', 'type']),
+                'requires_verification' => true,
+            ], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Registration failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Registration failed',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
+    public function verifyEmail(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email',
+            'otp' => 'required|digits:6',
+        ]);
+
+        $email = strtolower(trim($request->email));
+
+        $record = DB::table('email_verification_tokens')
+            ->where('email', $email)
+            ->where('token', $request->otp)
+            ->first();
+
+        if (!$record) {
+            return response()->json([
+                'error' => 'Invalid OTP',
+                'message' => 'The provided OTP is invalid.'
+            ], 400);
+        }
+
+        // Check if expired
+        if ($record->expires_at && Carbon::parse($record->expires_at)->isPast()) {
+            DB::table('email_verification_tokens')->where('email', $email)->delete();
+            return response()->json([
+                'error' => 'Expired OTP',
+                'message' => 'The OTP has expired. Please request a new one.'
+            ], 400);
+        }
+
+        $user = User::where('email', $email)->firstOrFail();
+        $user->email_verified_at = now();
+        $user->save();
+
+        DB::table('email_verification_tokens')->where('email', $email)->delete();
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Email verified successfully',
+            'user'    => $user->only(['id', 'username', 'email', 'type']),
+            'token'   => $token,
+        ], 200);
+    }
+
     /**
-     * Login
+     * Login (by username or email)
      */
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
+            'login'    => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $identifier = trim($request->login);
+        $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
+            ? User::where('email', strtolower($identifier))->first()
+            : User::where('username', $identifier)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'login' => ['The provided credentials are incorrect.'],
             ]);
+        }
+
+        // Optionally enforce email verification before login
+        if (is_null($user->email_verified_at)) {
+            return response()->json([
+                'message' => 'Please verify your email to continue.',
+                'requires_verification' => true,
+            ], 403);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -234,8 +222,25 @@ class AuthController extends Controller
         // Generate a 6-digit OTP
         $otp = random_int(100000, 999999);
 
+        // Normalize email casing
+        $email = strtolower(trim($request->email));
+
+        // Resend cooldown: disallow new OTP within 60 seconds
+        $existing = DB::table('password_reset_tokens')->where('email', $email)->first();
+        if ($existing) {
+            $createdAt = Carbon::parse($existing->created_at);
+            $cooldownEnds = $createdAt->addSeconds(60);
+            if (Carbon::now()->lt($cooldownEnds)) {
+                $retryAfter = Carbon::now()->diffInSeconds($cooldownEnds) + 1;
+                return response()->json([
+                    'message' => 'OTP recently sent. Please wait before requesting a new OTP.',
+                    'retry_after' => $retryAfter
+                ], 429);
+            }
+        }
+
         DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $request->email],
+            ['email' => $email],
             [
                 'token' => (string) $otp,
                 'created_at' => Carbon::now()
@@ -243,9 +248,11 @@ class AuthController extends Controller
         );
 
         try {
-            Mail::send('emails.password-otp', ['otp' => $otp], function ($message) use ($request) {
-                $message->to($request->email)
-                        ->subject('Your Password Reset OTP');
+            $user = User::where('email', $email)->first();
+            $username = $user?->username ?? 'User';
+            Mail::send('emails.password-otp', ['otp' => $otp, 'username' => $username], function ($message) use ($email) {
+                $message->to($email)
+                        ->subject('Password Reset OTP - Injera Platform');
             });
 
             return response()->json([
@@ -272,8 +279,11 @@ class AuthController extends Controller
             'password_confirmation' => 'required'
         ]);
 
+        // Normalize email casing
+        $email = strtolower(trim($request->email));
+
         $record = DB::table('password_reset_tokens')->where([
-            'email' => $request->email,
+            'email' => $email,
             'token' => $request->otp,
         ])->first();
 
@@ -284,22 +294,22 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // Check expiry (valid for 10 minutes)
+        // Check expiry (valid for $otpTtlMinutes minutes)
         $createdAt = Carbon::parse($record->created_at);
-        if ($createdAt->lt(Carbon::now()->subMinutes(10))) {
-            DB::table('password_reset_tokens')->where(['email' => $request->email])->delete();
+        if ($createdAt->lt(Carbon::now()->subMinutes($this->otpTtlMinutes))) {
+            DB::table('password_reset_tokens')->where(['email' => $email])->delete();
             return response()->json([
                 'error' => 'Expired OTP',
                 'message' => 'The OTP has expired. Please request a new one.'
             ], 400);
         }
 
-        User::where('email', $request->email)->update([
+        User::where('email', $email)->update([
             'password' => Hash::make($request->password)
         ]);
 
         // Invalidate OTP after successful reset
-        DB::table('password_reset_tokens')->where(['email' => $request->email])->delete();
+        DB::table('password_reset_tokens')->where(['email' => $email])->delete();
 
         return response()->json([
             'message' => 'Password reset successfully'

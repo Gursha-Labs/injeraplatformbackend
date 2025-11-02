@@ -5,12 +5,11 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
 
 // Authentication Routes
-Route::post('/register', [AuthController::class, 'register']); // Legacy
-Route::post('/register/user', [AuthController::class, 'registerUser']);
-Route::post('/register/advertiser', [AuthController::class, 'registerAdvertiser']);
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:10,1');
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/forgot-password', [AuthController::class, 'forget']);
-Route::post('/reset-password', [AuthController::class, 'reset']);
+Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
+Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
 
 // Public Routes
 Route::get('/advertisers/{userId}/profile', [ProfileController::class, 'getAdvertiserPublicProfile']);
