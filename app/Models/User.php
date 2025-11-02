@@ -2,47 +2,90 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use App\Traits\HasUuid;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, Notifiable, HasUuid;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
-        'name',
+        'username',
         'email',
         'password',
+        'type',
+        'email_verified_at',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+    ];
+
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Get the user's profile (polymorphic relationship)
      */
-    protected function casts(): array
+    public function profile()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        if ($this->type === 'user') {
+            return $this->hasOne(UserProfile::class);
+        } elseif ($this->type === 'advertiser') {
+            return $this->hasOne(AdvertiserProfile::class);
+        }
+        return null;
+    }
+
+    /**
+     * Get user profile
+     */
+    public function userProfile()
+    {
+        return $this->hasOne(UserProfile::class);
+    }
+
+    /**
+     * Get advertiser profile
+     */
+    public function advertiserProfile()
+    {
+        return $this->hasOne(AdvertiserProfile::class);
+    }
+
+    // Role helpers
+    public function isAdmin(): bool
+    {
+        return $this->type === 'admin';
+    }
+
+    public function isAdvertiser(): bool
+    {
+        return $this->type === 'advertiser';
+    }
+
+    public function isUser(): bool
+    {
+        return $this->type === 'user';
+    }
+
+    /**
+     * Get the appropriate profile based on user type
+     */
+    public function getProfileAttribute()
+    {
+        if ($this->isUser()) {
+            return $this->userProfile;
+        } elseif ($this->isAdvertiser()) {
+            return $this->advertiserProfile;
+        }
+        return null;
     }
 }
