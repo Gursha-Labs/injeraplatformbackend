@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Password Reset OTP - Injera Platform</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verify Your Email - Injera Platform</title>
     <style>
         body { font-family: Arial, Helvetica, sans-serif; background:#f6f9fc; margin:0; padding:24px; }
         .card { max-width:560px; margin:0 auto; background:#ffffff; border-radius:12px; padding:28px; border:1px solid #e5e7eb; box-shadow:0 2px 8px rgba(0,0,0,.04); }
@@ -15,18 +15,17 @@
         .footer { margin-top:28px; color:#6b7280; font-size:14px; }
         .strong { font-weight:700; }
     </style>
-</head>
+    </head>
 <body>
     <div class="card">
         <div class="brand">Injera Platform</div>
         <p class="greeting">Hello {{ $username ?? 'User' }}!</p>
-        <p class="line">We received a request to reset your password for Injera Platform.</p>
-        <p class="line">Your OTP code for password reset is:</p>
+        <p class="line">Thank you for registering with Injera Platform.</p>
+        <p class="line">Your OTP code for email verification is:</p>
         <div class="otp">{{ $otp }}</div>
         <p class="line strong">This OTP will expire in 15 minutes.</p>
-        <p class="muted">If you did not request a password reset, no further action is required.</p>
+        <p class="muted">If you did not create an account, no further action is required.</p>
         <p class="footer">Regards,<br/>The Injera Team</p>
     </div>
-    
 </body>
 </html>
