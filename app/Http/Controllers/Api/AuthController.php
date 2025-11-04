@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -21,39 +22,73 @@ class AuthController extends Controller
      * OTP expiration window in minutes
      */
     private int $otpTtlMinutes = 15;
+
     /**
      * Unified registration with email OTP verification
      */
-
     public function register(Request $request)
     {
         $request->validate([
-            'username' => 'required|string|max:100|unique:users,username',
-            'email'    => 'required|email|unique:users,email',
+            'username' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('users')->where(function ($query) {
+                    return $query->whereNotNull('email_verified_at');
+                })
+            ],
+            'email'    => [
+                'required',
+                'email',
+                Rule::unique('users')->where(function ($query) {
+                    return $query->whereNotNull('email_verified_at');
+                })
+            ],
             'password' => 'required|string|min:6',
             'type'     => 'required|in:user,advertiser',
         ]);
 
         DB::beginTransaction();
         try {
-            $user = User::create([
-                'username' => $request->username,
-                'email'    => strtolower(trim($request->email)),
-                'password' => Hash::make($request->password),
-                'type'     => $request->type,
-            ]);
+            // Check if unverified user exists with same email or username
+            $existingUnverifiedUser = User::where(function ($query) use ($request) {
+                $query->where('email', strtolower(trim($request->email)))
+                      ->orWhere('username', $request->username);
+            })->whereNull('email_verified_at')->first();
 
-            if ($user->type === 'user') {
-                UserProfile::create(['user_id' => $user->id]);
-            } else {
-                AdvertiserProfile::create([
-                    'user_id' => $user->id,
-                    'company_name' => $request->username,
-                    'phone_number' => '',
-                    'country' => 'N/A',
-                    'city' => 'N/A',
-                    'account_status' => 'pending',
+            if ($existingUnverifiedUser) {
+                // Update existing unverified user
+                $user = $existingUnverifiedUser;
+                $user->update([
+                    'username' => $request->username,
+                    'email' => strtolower(trim($request->email)),
+                    'password' => Hash::make($request->password),
+                    'type' => $request->type,
                 ]);
+            } else {
+                // Create new user
+                $user = User::create([
+                    'username' => $request->username,
+                    'email' => strtolower(trim($request->email)),
+                    'password' => Hash::make($request->password),
+                    'type' => $request->type,
+                ]);
+            }
+
+            // Create profile only if not exists
+            if ($user->type === 'user') {
+                UserProfile::firstOrCreate(['user_id' => $user->id]);
+            } else {
+                AdvertiserProfile::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'company_name' => $request->username,
+                        'phone_number' => '',
+                        'country' => 'N/A',
+                        'city' => 'N/A',
+                        'account_status' => 'pending',
+                    ]
+                );
             }
 
             // Generate OTP
@@ -64,12 +99,12 @@ class AuthController extends Controller
                 ['email' => $user->email],
                 [
                     'token'      => (string) $otp,
-                    'created_at' => now(),        // ← Always set
-                    'expires_at' => $expiresAt,   // ← For safety
+                    'created_at' => now(),
+                    'expires_at' => $expiresAt,
                 ]
             );
 
-            // Send email (non-blocking)
+            // Send email
             try {
                 Mail::send('emails.verify-otp', [
                     'otp' => $otp,
@@ -80,13 +115,12 @@ class AuthController extends Controller
                 });
             } catch (Exception $e) {
                 Log::error('Verification OTP email failed: ' . $e->getMessage());
-                // Do NOT fail registration
             }
 
             DB::commit();
 
             return response()->json([
-                'message' => 'Registration initiated. An OTP has been sent to your email to verify your account.',
+                'message' => 'Registration initiated. An OTP has been sent to your email.',
                 'user'    => $user->only(['id', 'username', 'email', 'type']),
                 'requires_verification' => true,
             ], 201);
@@ -124,9 +158,13 @@ class AuthController extends Controller
         // Check if expired
         if ($record->expires_at && Carbon::parse($record->expires_at)->isPast()) {
             DB::table('email_verification_tokens')->where('email', $email)->delete();
+            
+            // Auto-resend OTP when expired
+            $this->resendVerificationOtp($email);
+            
             return response()->json([
                 'error' => 'Expired OTP',
-                'message' => 'The OTP has expired. Please request a new one.'
+                'message' => 'The OTP has expired. A new OTP has been sent to your email.'
             ], 400);
         }
 
@@ -143,6 +181,70 @@ class AuthController extends Controller
             'user'    => $user->only(['id', 'username', 'email', 'type']),
             'token'   => $token,
         ], 200);
+    }
+
+    /**
+     * Resend verification OTP
+     */
+    public function resendVerification(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email'
+        ]);
+
+        $email = strtolower(trim($request->email));
+        
+        return $this->resendVerificationOtp($email);
+    }
+
+    /**
+     * Helper method to resend verification OTP
+     */
+    private function resendVerificationOtp($email)
+    {
+        $user = User::where('email', $email)->first();
+        
+        if (!$user) {
+            return response()->json([
+                'error' => 'User not found',
+                'message' => 'No user found with this email address.'
+            ], 404);
+        }
+
+        // Generate new OTP
+        $otp = random_int(100000, 999999);
+        $expiresAt = now()->addMinutes($this->otpTtlMinutes);
+
+        DB::table('email_verification_tokens')->updateOrInsert(
+            ['email' => $email],
+            [
+                'token'      => (string) $otp,
+                'created_at' => now(),
+                'expires_at' => $expiresAt,
+            ]
+        );
+
+        // Send email
+        try {
+            Mail::send('emails.verify-otp', [
+                'otp' => $otp,
+                'username' => $user->username
+            ], function ($message) use ($user) {
+                $message->to($user->email)
+                        ->subject('Verify Your Email - Injera Platform');
+            });
+
+            return response()->json([
+                'message' => 'New OTP sent successfully to your email.',
+                'user'    => $user->only(['id', 'username', 'email', 'type']),
+            ], 200);
+        } catch (Exception $e) {
+            Log::error('Resend OTP email failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to send OTP',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -166,11 +268,15 @@ class AuthController extends Controller
             ]);
         }
 
-        // Optionally enforce email verification before login
+        // Check if email is verified
         if (is_null($user->email_verified_at)) {
+            // Auto-resend OTP for unverified users
+            $this->resendVerificationOtp($user->email);
+            
             return response()->json([
-                'message' => 'Please verify your email to continue.',
+                'message' => 'Please verify your email to continue. A new OTP has been sent to your email.',
                 'requires_verification' => true,
+                'user' => $user->only(['id', 'username', 'email', 'type']),
             ], 403);
         }
 
