@@ -21,7 +21,7 @@ class AuthController extends Controller
     /**
      * OTP expiration window in minutes
      */
-    private int $otpTtlMinutes = 15;
+    private int $otpTtlMinutes = 5;
 
     /**
      * Unified registration with email OTP verification
@@ -155,19 +155,17 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // Check if expired
+        // CHECK EXPIRY — NO AUTO-RESEND
         if ($record->expires_at && Carbon::parse($record->expires_at)->isPast()) {
+            // Just delete expired token
             DB::table('email_verification_tokens')->where('email', $email)->delete();
-            
-            // Auto-resend OTP when expired
-            $this->resendVerificationOtp($email);
-            
             return response()->json([
                 'error' => 'Expired OTP',
-                'message' => 'The OTP has expired. A new OTP has been sent to your email.'
+                'message' => 'The OTP has expired. Please request a new one.'
             ], 400);
         }
 
+        // VALID OTP → VERIFY USER
         $user = User::where('email', $email)->firstOrFail();
         $user->email_verified_at = now();
         $user->save();
@@ -178,8 +176,8 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Email verified successfully',
-            'user'    => $user->only(['id', 'username', 'email', 'type']),
-            'token'   => $token,
+            'user' => $user->only(['id', 'username', 'email', 'type']),
+            'token' => $token,
         ], 200);
     }
 
@@ -197,9 +195,6 @@ class AuthController extends Controller
         return $this->resendVerificationOtp($email);
     }
 
-    /**
-     * Helper method to resend verification OTP
-     */
     private function resendVerificationOtp($email)
     {
         $user = User::where('email', $email)->first();
@@ -218,28 +213,27 @@ class AuthController extends Controller
         DB::table('email_verification_tokens')->updateOrInsert(
             ['email' => $email],
             [
-                'token'      => (string) $otp,
+                'token' => (string) $otp,
                 'created_at' => now(),
                 'expires_at' => $expiresAt,
             ]
         );
 
-        // Send email
         try {
             Mail::send('emails.verify-otp', [
                 'otp' => $otp,
                 'username' => $user->username
             ], function ($message) use ($user) {
-                $message->to($user->email)
-                        ->subject('Verify Your Email - Injera Platform');
+                $message->to($user->email)->subject('Your New OTP - Injera Platform');
             });
 
             return response()->json([
-                'message' => 'New OTP sent successfully to your email.',
-                'user'    => $user->only(['id', 'username', 'email', 'type']),
+                'message' => 'New OTP sent successfully!',
+                'user' => $user->only(['id', 'username', 'email', 'type']),
+                'requires_verification' => true
             ], 200);
         } catch (Exception $e) {
-            Log::error('Resend OTP email failed: ' . $e->getMessage());
+            Log::error('Resend OTP failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to send OTP',
                 'error' => $e->getMessage()
@@ -270,11 +264,8 @@ class AuthController extends Controller
 
         // Check if email is verified
         if (is_null($user->email_verified_at)) {
-            // Auto-resend OTP for unverified users
-            $this->resendVerificationOtp($user->email);
-            
             return response()->json([
-                'message' => 'Please verify your email to continue. A new OTP has been sent to your email.',
+                'message' => 'Please verify your email to continue.',
                 'requires_verification' => true,
                 'user' => $user->only(['id', 'username', 'email', 'type']),
             ], 403);
