@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ProfileController;
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:10,1');
+Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
