@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\AdController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -11,7 +12,6 @@ Route::post('/resend-verification', [AuthController::class, 'resendVerification'
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
-Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
 
 // Public Routes
 Route::get('/advertisers/{userId}/profile', [ProfileController::class, 'getAdvertiserPublicProfile']);
@@ -27,4 +27,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/user', [ProfileController::class, 'updateUserProfile']);
     Route::put('/profile/advertiser', [ProfileController::class, 'updateAdvertiserProfile']);
     Route::delete('/profile/picture', [ProfileController::class, 'deleteProfilePicture']);
+});
+
+
+Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/ads/upload', [AdController::class, 'upload']);
+    Route::post('/ads/{ad}/comment', [AdController::class, 'comment']);
 });
