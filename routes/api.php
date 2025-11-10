@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\AdController;
+use App\Http\Controllers\Api\AdFeedController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -35,4 +36,5 @@ Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'u
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/upload', [AdController::class, 'upload']);
     Route::post('/ads/{ad}/comment', [AdController::class, 'comment']);
+    Route::get('/ads/feed', [AdFeedController::class, 'index']);
 });
