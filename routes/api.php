@@ -35,6 +35,12 @@ Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'u
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/upload', [AdController::class, 'upload']);
+
+    // User comments
     Route::post('/ads/{ad}/comment', [AdController::class, 'comment']);
-    Route::get('/ads/feed', [AdFeedController::class, 'index']);
+    // Advertiser replies
+    Route::post('/ads/{ad}/comments/{comment}/reply', [AdController::class, 'reply']);
 });
+// Public Routes for ads feed
+Route::get('/ads/feed', [AdFeedController::class, 'index']);
+Route::get('/ads/{ad}', [AdController::class, 'show']);

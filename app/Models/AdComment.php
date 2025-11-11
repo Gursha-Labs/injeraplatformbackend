@@ -25,4 +25,9 @@ class AdComment extends Model
     {
         return $this->belongsTo(AdVideo::class, 'ad_id');
     }
+
+    public function replies()
+    {
+        return $this->hasMany(AdCommentReply::class, 'ad_comment_id');
+    }
 }
