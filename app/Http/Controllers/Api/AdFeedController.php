@@ -16,17 +16,20 @@ class AdFeedController extends Controller
         $query = AdVideo::with([    
                 'advertiser:id,username,profile_picture',
                 'category:id,name',
-                'tags:id,name'
+                'tags:id,name',
+                'comments' => function ($q) {
+                    $q->with(['user:id,username,profile_picture', 'replies.advertiser:id,username,profile_picture'])
+                      ->select('id', 'ad_id', 'user_id', 'comment', 'created_at');
+                }
             ])
             ->select([
                 'id', 'title', 'video_url', 'advertiser_id', 'category_id',
                 'view_count', 'comment_count', 'duration', 'created_at'
             ])
             ->orderBy('created_at', 'desc')
-            ->orderBy('id', 'desc'); // ← CRITICAL: secondary sort
+            ->orderBy('id', 'desc');
     
         if ($cursor) {
-            // Decode cursor: "created_at|id"
             [$cursorDate, $cursorId] = explode('|', $cursor);
     
             $query->where(function ($q) use ($cursorDate, $cursorId) {

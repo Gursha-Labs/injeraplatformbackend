@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdVideo;
+use App\Models\AdComment;
+use App\Models\AdCommentReply;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Models\Tag;
@@ -105,6 +107,55 @@ class AdController extends Controller
         ]);
     }
 
+
+    public function reply(Request $request, $adId, $commentId)
+    {
+        $request->validate(['reply' => 'required|string|max:500']);
+    
+        $user = $request->user();
+        if ($user->type !== 'advertiser') {
+            return response()->json(['error' => 'Only advertisers can reply'], 403);
+        }
+    
+        $comment = AdComment::findOrFail($commentId);
+        $ad = AdVideo::findOrFail($adId);
+    
+        if ($ad->advertiser_id !== $user->id) {
+            return response()->json(['error' => 'You can only reply to comments on your ad'], 403);
+        }
+    
+        $reply = AdCommentReply::create([
+            'id' => (string) Str::uuid(),
+            'ad_comment_id' => $comment->id,
+            'advertiser_id' => $user->id,
+            'reply' => $request->reply
+        ]);
+    
+        return response()->json([
+            'message' => 'Reply added!',
+            'reply' => $reply->load('advertiser:id,username,profile_picture')
+        ], 201);
+    }
+
+
+    public function show(AdVideo $ad)
+    {
+        $ad->load([
+            'advertiser:id,username,profile_picture',
+            'category:id,name',
+            'tags:id,name',
+            'comments' => function ($q) {
+                $q->with(['user:id,username,profile_picture', 'replies.advertiser:id,username,profile_picture'])
+                  ->select('id', 'ad_id', 'user_id', 'comment', 'created_at');
+            }
+        ]);
+    
+        return response()->json([
+            'ad' => $ad
+        ]);
+    }
+
+    
     private function getVideoDuration($videoUrl)
     {
         $path = storage_path('app/public/' . $videoUrl);
