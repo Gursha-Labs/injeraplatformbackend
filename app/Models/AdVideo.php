@@ -33,4 +33,9 @@ class AdVideo extends Model
     {
         return $this->hasMany(AdComment::class, 'ad_id');
     }
+
+    public function views()
+    {
+        return $this->hasMany(AdView::class, 'ad_id', 'id');
+    }
 }
