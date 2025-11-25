@@ -19,71 +19,66 @@ class AdController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'file' => 'required|file|mimes:mp4,mov,avi|max:102400',
+            'file' => 'required|file|mimes:mp4,mov,avi|max:102400', // 100MB max
             'category_id' => 'required|exists:categories,id',
             'tag_names' => 'sometimes|array',
             'tag_names.*' => 'string|max:50'
         ]);
-
+    
         $user = $request->user();
         if ($user->type !== 'advertiser') {
             return response()->json(['error' => 'Only advertisers can upload ads'], 403);
         }
-
+    
         DB::beginTransaction();
         try {
-            // Store file
+            // UPLOAD TO CLOUDFLARE R2 (100% FREE + CDN AUTOMATIC)
             $file = $request->file('file');
             $extension = $file->getClientOriginalExtension();
-            $fileName = 'ad_' . time() . '_' . uniqid() . '.' . $extension;
-            $path = $file->storeAs('ads', $fileName, 'public');
-            $videoUrl = 'ads/' . $fileName;
-
+            $fileName = 'ads/' . time() . '_' . Str::random(10) . '.' . $extension;
+    
+            // This uploads to R2 and returns public URL via Cloudflare CDN
+            $path = $file->storeAs('', $fileName, 'r2');
+            // Get the base URL from config or use the direct path if URL is not available
+            $baseUrl = rtrim(env('R2_PUBLIC_URL', ''), '/');
+            $videoUrl = $baseUrl ? "$baseUrl/$path" : $path;
+    
             // Create ad video
             $ad = AdVideo::create([
                 'advertiser_id' => $user->id,
                 'title' => $request->title,
                 'description' => $request->description,
-                'video_url' => $videoUrl,
+                'video_url' => $videoUrl, // DIRECT CDN URL — SUPER FAST IN ETHIOPIA
                 'category_id' => $request->category_id,
-                'duration' => $this->getVideoDuration($file),
+                'duration' => $this->getVideoDuration($file->getRealPath()), // temp path
             ]);
-
+    
             // Handle tags
             if ($request->has('tag_names')) {
                 $tagIds = [];
-                
                 foreach ($request->tag_names as $tagName) {
                     $tagName = trim(strtolower($tagName));
                     if (empty($tagName)) continue;
-
-                    // The HasUuid trait will automatically generate the ID
+    
                     $tag = Tag::firstOrCreate(['name' => $tagName]);
                     $tagIds[] = $tag->id;
                 }
-
                 if (!empty($tagIds)) {
                     $ad->tags()->attach($tagIds);
                 }
             }
-
+    
             DB::commit();
-
+    
             return response()->json([
-                'message' => 'Ad uploaded successfully!',
+                'message' => 'Ad uploaded successfully to Cloudflare R2 + CDN!',
                 'ad' => $ad->load('category', 'tags')
             ], 201);
-
+    
         } catch (\Exception $e) {
             DB::rollBack();
-            
-            // Clean up uploaded file if something went wrong
-            if (isset($videoUrl) && Storage::disk('public')->exists($videoUrl)) {
-                Storage::disk('public')->delete($videoUrl);
-            }
-
             return response()->json([
-                'error' => 'Failed to upload ad: ' . $e->getMessage()
+                'error' => 'Upload failed: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -156,13 +151,12 @@ class AdController extends Controller
     }
 
     
-    private function getVideoDuration($videoUrl)
+    private function getVideoDuration($filePath)
     {
-        $path = storage_path('app/public/' . $videoUrl);
-        if (!file_exists($path)) return null;
-
-        $cmd = "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 " . escapeshellarg($path);
+        if (!file_exists($filePath)) return null;
+    
+        $cmd = "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 " . escapeshellarg($filePath);
         $output = shell_exec($cmd);
-        return $output ? (int) round(floatval($output)) : null;
+        return $output ? (int) round(floatval(trim($output))) : null;
     }
 }
