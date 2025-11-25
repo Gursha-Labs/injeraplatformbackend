@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\AdController;
 use App\Http\Controllers\Api\AdFeedController;
+use App\Http\Controllers\Api\AdViewController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -41,6 +42,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/{ad}/comment', [AdController::class, 'comment']);
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [AdController::class, 'reply']);
+    
+    // Ad views
+    Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
+    Route::get('/user/points', [AdViewController::class, 'points']);
 });
 // Public Routes for ads feed
 Route::get('/ads/feed', [AdFeedController::class, 'index']);
