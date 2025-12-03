@@ -9,11 +9,32 @@ use App\Models\AdCommentReply;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Models\Tag;
+use App\Models\Category;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class AdController extends Controller
 {
+    /**
+     * Get all categories for ad upload form
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCategories()
+    {
+        $categories = Category::select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($categories);
+    }
+
+    /**
+     * Upload a new ad video
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function upload(Request $request)
     {
         $request->validate([
