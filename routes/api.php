@@ -47,6 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
 });
+// Public Routes
+Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed
 Route::get('/ads/feed', [AdFeedController::class, 'index']);
 Route::get('/ads/{ad}', [AdController::class, 'show']);
