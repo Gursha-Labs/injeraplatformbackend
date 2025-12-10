@@ -10,7 +10,7 @@ class AdCommentReply extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['id', 'ad_comment_id', 'advertiser_id', 'reply'];
+    protected $fillable = ['id', 'ad_comment_id', 'user_id', 'reply'];
 
     protected static function boot()
     {
@@ -22,6 +22,13 @@ class AdCommentReply extends Model
         });
     }
 
-    public function comment() { return $this->belongsTo(AdComment::class, 'ad_comment_id'); }
-    public function advertiser() { return $this->belongsTo(User::class, 'advertiser_id'); }
+    public function comment()
+    {
+        return $this->belongsTo(AdComment::class, 'ad_comment_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 }

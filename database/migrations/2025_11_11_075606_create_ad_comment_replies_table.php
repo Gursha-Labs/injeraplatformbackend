@@ -14,12 +14,24 @@ return new class extends Migration
         Schema::create('ad_comment_replies', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('ad_comment_id');
-            $table->uuid('advertiser_id');
+            $table->uuid('user_id'); // ← ALL USERS CAN REPLY (advertiser + regular user)
             $table->text('reply');
             $table->timestamps();
-        
-            $table->foreign('ad_comment_id')->references('id')->on('ad_comments')->onDelete('cascade');
-            $table->foreign('advertiser_id')->references('id')->on('users')->onDelete('cascade');
+
+            // Foreign keys
+            $table->foreign('ad_comment_id')
+                  ->references('id')
+                  ->on('ad_comments')
+                  ->onDelete('cascade');
+
+            $table->foreign('user_id')
+                  ->references('id')
+                  ->on('users')
+                  ->onDelete('cascade');
+
+            // Optional: Index for faster queries
+            $table->index('ad_comment_id');
+            $table->index('user_id');
         });
     }
 
