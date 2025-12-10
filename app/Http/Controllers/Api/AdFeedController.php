@@ -16,11 +16,7 @@ class AdFeedController extends Controller
         $query = AdVideo::with([    
                 'advertiser:id,username,profile_picture',
                 'category:id,name',
-                'tags:id,name',
-                'comments' => function ($q) {
-                    $q->with(['user:id,username,profile_picture', 'replies.advertiser:id,username,profile_picture'])
-                      ->select('id', 'ad_id', 'user_id', 'comment', 'created_at');
-                }
+                'tags:id,name'
             ])
             ->select([
                 'id', 'title', 'video_url', 'advertiser_id', 'category_id',
@@ -54,6 +50,19 @@ class AdFeedController extends Controller
             'data' => $ads,
             'next_cursor' => $nextCursor,
             'has_more' => $hasMore
+        ]);
+    }
+
+    public function show(AdVideo $ad)
+    {
+        $ad->load([
+            'advertiser:id,username,profile_picture',
+            'category:id,name',
+            'tags:id,name'
+        ]);
+    
+        return response()->json([
+            'ad' => $ad
         ]);
     }
 }

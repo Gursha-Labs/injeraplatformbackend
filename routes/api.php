@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\AdController;
 use App\Http\Controllers\Api\AdFeedController;
 use App\Http\Controllers\Api\AdViewController;
+use App\Http\Controllers\Api\CommentController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -39,9 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/upload', [AdController::class, 'upload']);
 
     // User comments
-    Route::post('/ads/{ad}/comment', [AdController::class, 'comment']);
+    Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
     // Advertiser replies
-    Route::post('/ads/{ad}/comments/{comment}/reply', [AdController::class, 'reply']);
+    Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
     
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
@@ -51,4 +52,5 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed
 Route::get('/ads/feed', [AdFeedController::class, 'index']);
-Route::get('/ads/{ad}', [AdController::class, 'show']);
+Route::get('/ads/{ad}', [AdFeedController::class, 'show']);
+Route::get('/ads/{ad}/comments', [CommentController::class, 'index']);
