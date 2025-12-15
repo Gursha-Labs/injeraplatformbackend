@@ -45,8 +45,12 @@ public function search_ads(Request $request)
             });
         }
 
-        $results = $query->get();
-        if($results->isEmpty()){
+        $perPage = $request->input('per_page', 15);
+        $page = $request->input('page', 1);
+        
+        $paginatedResults = $query->paginate($perPage, ['*'], 'page', $page);
+        
+        if($paginatedResults->isEmpty()){
             return response()->json([
                 'success' => false,
                 'message' => 'No ads found matching the search criteria.'
@@ -55,17 +59,28 @@ public function search_ads(Request $request)
 
         return response()->json([
             'success' => true,
-            'data' => $results
+            'data' => $paginatedResults->items(),
+            'pagination' => [
+                'current_page' => $paginatedResults->currentPage(),
+                'last_page' => $paginatedResults->lastPage(),
+                'per_page' => $paginatedResults->perPage(),
+                'total' => $paginatedResults->total(),
+                'from' => $paginatedResults->firstItem(),
+                'to' => $paginatedResults->lastItem(),
+                'has_more_pages' => $paginatedResults->hasMorePages(),
+                'has_previous_pages' => $paginatedResults->currentPage() > 1,
+                'next_page_url' => $paginatedResults->nextPageUrl(),
+                'previous_page_url' => $paginatedResults->previousPageUrl(),
+            ]
         ]);
 
     } catch (\Exception $e) {
-        // Log the error for debugging
         \Log::error('Search Ads Error: ' . $e->getMessage());
 
         return response()->json([
             'success' => false,
             'message' => 'Failed to search ads',
-            'error' => $e->getMessage() // optional, hide in production
+            'error' => $e->getMessage()
         ], 500);
     }
 }
