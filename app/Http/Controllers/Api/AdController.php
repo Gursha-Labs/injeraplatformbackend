@@ -13,11 +13,63 @@ use Illuminate\Support\Facades\Storage;
 
 class AdController extends Controller
 {
+    
     /**
      * Get all categories for ad upload form
      *
      * @return \Illuminate\Http\JsonResponse
      */
+ protected $tagSearchable = ['name'];
+protected $videoSearchable = ['title', 'description', 'video_url'];
+
+public function search_ads(Request $request)
+{
+    try {
+        $query = AdVideo::query()
+            ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
+            ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
+            ->select('ad_videos.*')
+            ->distinct();
+
+        if ($request->filled('q')) {
+            $searchTerm = $request->input('q');
+
+            $query->where(function ($q) use ($searchTerm) {
+                foreach ($this->tagSearchable as $field) {
+                    $q->orWhere("tags.$field", 'LIKE', '%' . $searchTerm . '%');
+                }
+
+                foreach ($this->videoSearchable as $field) {
+                    $q->orWhere("ad_videos.$field", 'LIKE', '%' . $searchTerm . '%');
+                }
+            });
+        }
+
+        $results = $query->get();
+        if($results->isEmpty()){
+            return response()->json([
+                'success' => false,
+                'message' => 'No ads found matching the search criteria.'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $results
+        ]);
+
+    } catch (\Exception $e) {
+        // Log the error for debugging
+        \Log::error('Search Ads Error: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to search ads',
+            'error' => $e->getMessage() // optional, hide in production
+        ], 500);
+    }
+}
+
     public function getCategories()
     {
         $categories = Category::select('id', 'name')

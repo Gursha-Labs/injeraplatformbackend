@@ -31,23 +31,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/user', [ProfileController::class, 'updateUserProfile']);
     Route::put('/profile/advertiser', [ProfileController::class, 'updateAdvertiserProfile']);
     Route::delete('/profile/picture', [ProfileController::class, 'deleteProfilePicture']);
-});
-
-
-Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
-
-Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads/upload', [AdController::class, 'upload']);
 
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
-    
+    Route::get("/seach-video/{search_term}",[AdController::class,"search_ads"]);
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
 });
+
+
+Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
+
+
 // Public Routes
 Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed

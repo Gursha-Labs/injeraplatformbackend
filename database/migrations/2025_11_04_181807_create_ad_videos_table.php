@@ -14,14 +14,14 @@ return new class extends Migration
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('video_url'); // e.g., "ad_123.mp4"
-            $table->uuid('category_id')->nullable();
+            // $table->uuid('category_id')->nullable();
             $table->integer('duration')->nullable(); // seconds
             $table->integer('view_count')->default(0);
             $table->integer('comment_count')->default(0);
             $table->timestamps();
 
             $table->foreign('advertiser_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('category_id')->references('id')->on('categories')->onDelete('set null');
+            // $table->foreign('category_id')->references('id')->on('categories')->onDelete('set null');
         });
     }
 
