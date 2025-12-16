@@ -24,65 +24,69 @@ protected $videoSearchable = ['title', 'description', 'video_url'];
 
 public function search_ads(Request $request)
 {
-    try {
-        $query = AdVideo::query()
-            ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
-            ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
-            ->select('ad_videos.*')
-            ->distinct();
-
-        if ($request->filled('q')) {
-            $searchTerm = $request->input('q');
-
-            $query->where(function ($q) use ($searchTerm) {
-                foreach ($this->tagSearchable as $field) {
-                    $q->orWhere("tags.$field", 'LIKE', '%' . $searchTerm . '%');
-                }
-
-                foreach ($this->videoSearchable as $field) {
-                    $q->orWhere("ad_videos.$field", 'LIKE', '%' . $searchTerm . '%');
-                }
-            });
-        }
-
-        $perPage = $request->input('per_page', 15);
-        $page = $request->input('page', 1);
+     try {
+     $videoIdsQuery = AdVideo::query()
+     ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
+     ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
+     ->select('ad_videos.id')
+     ->distinct();
+     
+    if ($request->filled('q')) {
+        $searchTerm = $request->input('q');
         
-        $paginatedResults = $query->paginate($perPage, ['*'], 'page', $page);
-        
-        if($paginatedResults->isEmpty()){
-            return response()->json([
-                'success' => false,
-                'message' => 'No ads found matching the search criteria.'
-            ], 404);
-        }
+        $videoIdsQuery->where(function ($q) use ($searchTerm) {
+            foreach ($this->tagSearchable as $field) {
+                $q->orWhere("tags.$field", 'LIKE', '%' . $searchTerm . '%');
+            }
 
+            foreach ($this->videoSearchable as $field) {
+                $q->orWhere("ad_videos.$field", 'LIKE', '%' . $searchTerm . '%');
+            }
+        });
+    }
+
+    $videoIds = $videoIdsQuery->pluck('id');
+    
+    if ($videoIds->isEmpty()) {
         return response()->json([
             'success' => true,
-            'data' => $paginatedResults->items(),
-            'pagination' => [
-                'current_page' => $paginatedResults->currentPage(),
-                'last_page' => $paginatedResults->lastPage(),
-                'per_page' => $paginatedResults->perPage(),
-                'total' => $paginatedResults->total(),
-                'from' => $paginatedResults->firstItem(),
-                'to' => $paginatedResults->lastItem(),
-                'has_more_pages' => $paginatedResults->hasMorePages(),
-                'has_previous_pages' => $paginatedResults->currentPage() > 1,
-                'next_page_url' => $paginatedResults->nextPageUrl(),
-                'previous_page_url' => $paginatedResults->previousPageUrl(),
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error('Search Ads Error: ' . $e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to search ads',
-            'error' => $e->getMessage()
-        ], 500);
+            'data' => [],
+            'message' => 'No ads found matching the search criteria.'
+        ], 404);
     }
+
+    $perPage = $request->input('per_page', 15);
+    $page = $request->input('page', 1);
+    
+    $paginatedResults = AdVideo::whereIn('id', $videoIds)
+        ->paginate($perPage, ['*'], 'page', $page);
+
+    return response()->json([
+        'success' => true,
+        'data' => $paginatedResults->items(),
+        'pagination' => [
+            'current_page' => $paginatedResults->currentPage(),
+            'last_page' => $paginatedResults->lastPage(),
+            'per_page' => $paginatedResults->perPage(),
+            'total' => $paginatedResults->total(),
+            'from' => $paginatedResults->firstItem(),
+            'to' => $paginatedResults->lastItem(),
+            'has_more_pages' => $paginatedResults->hasMorePages(),
+            'has_previous_pages' => $paginatedResults->currentPage() > 1,
+            'next_page_url' => $paginatedResults->nextPageUrl(),
+            'previous_page_url' => $paginatedResults->previousPageUrl(),
+        ]
+    ]);
+
+} catch (\Exception $e) {
+    \Log::error('Search Ads Error: ' . $e->getMessage());
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Failed to search ads',
+        'error' => $e->getMessage()
+    ], 500);
+}
 }
 
     public function getCategories()
