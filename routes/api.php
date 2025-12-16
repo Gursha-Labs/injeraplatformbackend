@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdController;
 use App\Http\Controllers\Api\AdFeedController;
 use App\Http\Controllers\Api\AdViewController;
 use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\OrderController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -41,6 +42,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
+    Route::prefix('orders')->group(function () {
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::post('/orders', [OrderController::class, 'store']);
+        Route::get('/orders/{order}', [OrderController::class, 'show']);
+        Route::put('/orders/{order}', [OrderController::class, 'update']);
+        Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
+        Route::get('/my-orders', [OrderController::class, 'my_orders']);
+        Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
+        Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
+    });
 });
 
 
