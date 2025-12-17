@@ -75,22 +75,6 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Create profile only if not exists
-            if ($user->type === 'user') {
-                UserProfile::firstOrCreate(['user_id' => $user->id]);
-            } else {
-                AdvertiserProfile::firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'company_name' => $request->username,
-                        'phone_number' => '',
-                        'country' => 'N/A',
-                        'city' => 'N/A',
-                        'account_status' => 'pending',
-                    ]
-                );
-            }
-
             // Generate OTP
             $otp = random_int(100000, 999999);
             $expiresAt = now()->addMinutes($this->otpTtlMinutes);
