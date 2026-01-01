@@ -7,6 +7,11 @@ use App\Http\Controllers\Api\AdController;
 use App\Http\Controllers\Api\AdFeedController;
 use App\Http\Controllers\Api\AdViewController;
 use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\Api\UserProfileController;
+use App\Http\Controllers\Api\AdvertiserProfileController;
+use App\Http\Controllers\Api\DashboardController;
+
+use App\Http\Controllers\OrderController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -16,8 +21,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
 
-// Public Routes
-Route::get('/advertisers/{userId}/profile', [ProfileController::class, 'getAdvertiserPublicProfile']);
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -26,28 +29,49 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     
-    // Profile Management
-    Route::get('/profile', [ProfileController::class, 'show']);
-    Route::put('/profile/user', [ProfileController::class, 'updateUserProfile']);
-    Route::put('/profile/advertiser', [ProfileController::class, 'updateAdvertiserProfile']);
-    Route::delete('/profile/picture', [ProfileController::class, 'deleteProfilePicture']);
-});
+    // User Profile
+    Route::get('/profile/user', [UserProfileController::class, 'show']);
+    Route::put('/profile/user', [UserProfileController::class, 'update']);
+    Route::delete('/profile/user/picture', [UserProfileController::class, 'deleteProfilePicture']);
 
+    // Advertiser Profile
+    Route::get('/profile/advertiser', [AdvertiserProfileController::class, 'show']);
+    Route::put('/profile/advertiser', [AdvertiserProfileController::class, 'update']);
+    Route::get('/advertiser/public/{userId}', [AdvertiserProfileController::class, 'publicProfile']);
+    Route::delete('/profile/advertiser/picture', [AdvertiserProfileController::class, 'deleteProfilePicture']);
 
-Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
+    // Unified Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
-Route::middleware('auth:sanctum')->group(function () {
+    // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
 
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
-    
+    // Search videos
+    Route::get("/seach-video/{search_term}",[AdController::class,"search_ads"]);
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
+    // Orders
+    Route::prefix('orders')->group(function () {
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::post('/orders', [OrderController::class, 'store']);
+    Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::put('/orders/{order}', [OrderController::class, 'update']);
+    Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
+    Route::get('/my-orders', [OrderController::class, 'my_orders']);
+    Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
+    Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
+    });
 });
+
+
+Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
+
+
 // Public Routes
 Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed

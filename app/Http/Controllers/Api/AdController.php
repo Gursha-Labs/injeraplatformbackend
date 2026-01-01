@@ -8,16 +8,89 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Models\Tag;
 use App\Models\Category;
+use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class AdController extends Controller
 {
+    
     /**
      * Get all categories for ad upload form
      *
      * @return \Illuminate\Http\JsonResponse
      */
+protected $tagSearchable = ['name'];
+protected $videoSearchable = ['title', 'description', 'video_url'];
+
+public function search_ads(Request $request)
+{
+     try {
+     $videoIdsQuery = AdVideo::query()
+     ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
+     ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
+     ->select('ad_videos.id')
+     ->distinct();
+     
+    if ($request->filled('q')) {
+        $searchTerm = $request->input('q');
+        
+        $videoIdsQuery->where(function ($q) use ($searchTerm) {
+            foreach ($this->tagSearchable as $field) {
+                $q->orWhere("tags.$field", 'LIKE', '%' . $searchTerm . '%');
+            }
+
+            foreach ($this->videoSearchable as $field) {
+                $q->orWhere("ad_videos.$field", 'LIKE', '%' . $searchTerm . '%');
+            }
+        });
+    }
+
+    $videoIds = $videoIdsQuery->pluck('id');
+    
+    if ($videoIds->isEmpty()) {
+        return response()->json([
+            'success' => true,
+            'data' => [],
+            'message' => 'No ads found matching the search criteria.'
+        ], 404);
+    }
+
+    $perPage = $request->input('per_page', 15);
+    $page = $request->input('page', 1);
+    
+    $paginatedResults = AdVideo::whereIn('id', $videoIds)
+        ->paginate($perPage, ['*'], 'page', $page);
+
+    return response()->json([
+        'success' => true,
+        'data' => $paginatedResults->items(),
+        'pagination' => [
+            'current_page' => $paginatedResults->currentPage(),
+            'last_page' => $paginatedResults->lastPage(),
+            'per_page' => $paginatedResults->perPage(),
+            'total' => $paginatedResults->total(),
+            'from' => $paginatedResults->firstItem(),
+            'to' => $paginatedResults->lastItem(),
+            'has_more_pages' => $paginatedResults->hasMorePages(),
+            'has_previous_pages' => $paginatedResults->currentPage() > 1,
+            'next_page_url' => $paginatedResults->nextPageUrl(),
+            'previous_page_url' => $paginatedResults->previousPageUrl(),
+        ]
+    ]);
+
+} catch (\Exception $e) {
+    Log::error('Search Ads Error: ' . $e->getMessage());
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Failed to search ads',
+        'error' => $e->getMessage()
+    ], 500);
+}
+}
+
     public function getCategories()
     {
         $categories = Category::select('id', 'name')
@@ -33,6 +106,101 @@ class AdController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
+/* public function upload(Request $request)
+{
+    $request->validate([
+        'title' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'file' => 'required|file|mimes:mp4,mov,avi|max:102400', // 100MB max
+        'category_id' => 'required|exists:categories,id',
+        'tag_names' => 'sometimes|array',
+        'tag_names.*' => 'string|max:50',
+        'is_orderable' => 'nullable|boolean',
+        'price' => 'required_if:is_orderable,true|nullable|numeric|min:0',
+        'location' => 'required_if:is_orderable,true|nullable|string|max:255',
+        'images' => 'required_if:is_orderable,true|nullable|array', // Changed to array
+        'images.*' => 'image|max:5120', // Validate each image
+    ]);
+
+    $user = $request->user();
+    if ($user->type !== 'advertiser') {
+        return response()->json(['error' => 'Only advertisers can upload ads'], 403);
+    }
+
+    DB::beginTransaction();
+    try {
+        // Upload video to Cloudflare R2
+        $file = $request->file('file');
+        $extension = $file->getClientOriginalExtension();
+        $fileName = 'ads/' . time() . '_' . Str::random(10) . '.' . $extension;
+        $path = $file->storeAs('', $fileName, 'r2');
+        
+        $baseUrl = rtrim(env('R2_PUBLIC_URL', ''), '/');
+        $videoUrl = $baseUrl ? "$baseUrl/$path" : $path;
+
+        // Create ad video record
+        $ad = AdVideo::create([
+            'advertiser_id' => $user->id,
+            'title' => $request->title,
+            'description' => $request->description,
+            'video_url' => $videoUrl,
+            'category_id' => $request->category_id,
+            'is_orderable' => $request->boolean('is_orderable'),
+            'duration' => $this->getVideoDuration($file->getRealPath()),
+        ]);
+
+        // Create product variant if orderable
+        if ($request->is_orderable) {
+            $images = [];
+            
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $imageFile) {
+                    $imageExtension = $imageFile->getClientOriginalExtension();
+                    $imageName = 'product_variants/' . time() . '_' . Str::random(10) . '.' . $imageExtension;
+                    $imagePath = $imageFile->storeAs('', $imageName, 'r2');
+                    $images[] = $baseUrl ? "$baseUrl/$imagePath" : $imagePath;
+                }
+            }
+
+            ProductVariant::create([ // Note: class name should be PascalCase
+                'video_id' => $ad->id,
+                'images' => !empty($images) ? json_encode($images) : null,
+                'price' => $request->price,
+                'location' => $request->location,
+            ]);
+        }
+
+        // Handle tags
+        if ($request->has('tag_names')) {
+            $tagIds = [];
+            foreach ($request->tag_names as $tagName) {
+                $tagName = trim(strtolower($tagName));
+                if (empty($tagName)) continue;
+
+                $tag = Tag::firstOrCreate(['name' => $tagName]);
+                $tagIds[] = $tag->id;
+            }
+            if (!empty($tagIds)) {
+                $ad->tags()->attach($tagIds);
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Ad uploaded successfully to Cloudflare R2 + CDN!',
+            'ad' => $ad->load('category', 'tags', 'productVariant')
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'error' => 'Upload failed: ' . $e->getMessage()
+        ], 500);
+    }
+} */
+
+    
     public function upload(Request $request)
     {
         $request->validate([

@@ -13,8 +13,7 @@ return new class extends Migration
             $table->uuid('ad_id');
             $table->uuid('user_id');
             $table->text('comment');
-            $table->timestamp('created_at')->useCurrent();
-            $table->timestamp('updated_at')->useCurrentOnUpdate();
+            $table->timestamps();
 
             $table->foreign('ad_id')->references('id')->on('ad_videos')->onDelete('cascade');
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
