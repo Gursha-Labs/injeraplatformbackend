@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AdvertiserProfileController;
 use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\AdminController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -44,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Unified Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
 
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
