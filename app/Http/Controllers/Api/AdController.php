@@ -117,8 +117,8 @@ public function upload(Request $request)
         'is_orderable' => 'nullable|boolean',
         'price' => 'required_if:is_orderable,true|nullable|numeric|min:0',
         'location' => 'required_if:is_orderable,true|nullable|string|max:255',
-        'images' => 'required_if:is_orderable,true|nullable|array', // Changed to array
-        'images.*' => 'image|max:5120', // Validate each image
+        'image' => 'required_if:is_orderable,true|nullable|array', // Changed to array
+        'image.*' => 'image|max:5120', // Validate each image
     ]);
 
     $user = $request->user();
@@ -163,7 +163,7 @@ public function upload(Request $request)
 
             ProductVariant::create([ // Note: class name should be PascalCase
                 'video_id' => $ad->id,
-                'images' => !empty($images) ? json_encode($images) : null,
+                'image' => !empty($images) ? json_encode($images) : null,
                 'price' => $request->price,
                 'location' => $request->location,
             ]);
