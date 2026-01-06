@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AdvertiserProfileController;
 use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\AdminController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -44,6 +45,8 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
 
     // Unified Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
 
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
@@ -81,3 +84,4 @@ Route::get('/categories', [AdController::class, 'getCategories'])->name('api.cat
 Route::get('/ads/feed', [AdFeedController::class, 'index']);
 Route::get('/ads/{ad}', [AdFeedController::class, 'show']);
 Route::get('/ads/{ad}/comments', [CommentController::class, 'index']);
+Route::get('/ads/{ad}/comments/{comment}/replies', [CommentController::class, 'replies']);
