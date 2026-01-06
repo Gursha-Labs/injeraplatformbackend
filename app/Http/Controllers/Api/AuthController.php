@@ -28,25 +28,32 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
-        $request->validate([
-            'username' => [
-                'required',
-                'string',
-                'max:100',
-                Rule::unique('users')->where(function ($query) {
-                    return $query->whereNotNull('email_verified_at');
-                })
-            ],
-            'email'    => [
-                'required',
-                'email',
-                Rule::unique('users')->where(function ($query) {
-                    return $query->whereNotNull('email_verified_at');
-                })
-            ],
-            'password' => 'required|string|min:6',
-            'type'     => 'required|in:user,advertiser',
-        ]);
+        try {
+            $request->validate([
+                'username' => [
+                    'required',
+                    'string',
+                    'max:100',
+                    Rule::unique('users')->where(function ($query) {
+                        return $query->whereNotNull('email_verified_at');
+                    })
+                ],
+                'email'    => [
+                    'required',
+                    'email',
+                    Rule::unique('users')->where(function ($query) {
+                        return $query->whereNotNull('email_verified_at');
+                    })
+                ],
+                'password' => 'required|string|min:6',
+                'type'     => 'required|in:user,advertiser',
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -57,8 +64,37 @@ class AuthController extends Controller
             })->whereNull('email_verified_at')->first();
 
             if ($existingUnverifiedUser) {
-                // Update existing unverified user
+                // Check if this is the same user trying to register again (allow re-registration for unverified users)
                 $user = $existingUnverifiedUser;
+                
+                // Check if username/email is already taken by a verified user
+                if ($user->email !== strtolower(trim($request->email))) {
+                    $emailExists = User::where('email', strtolower(trim($request->email)))
+                        ->whereNotNull('email_verified_at')
+                        ->exists();
+                    
+                    if ($emailExists) {
+                        return response()->json([
+                            'message' => 'Email already registered',
+                            'error' => 'The email address is already registered by another user.'
+                        ], 409);
+                    }
+                }
+
+                if ($user->username !== $request->username) {
+                    $usernameExists = User::where('username', $request->username)
+                        ->whereNotNull('email_verified_at')
+                        ->exists();
+                    
+                    if ($usernameExists) {
+                        return response()->json([
+                            'message' => 'Username already taken',
+                            'error' => 'The username is already taken by another user.'
+                        ], 409);
+                    }
+                }
+
+                // Update existing unverified user
                 $user->update([
                     'username' => $request->username,
                     'email' => strtolower(trim($request->email)),
@@ -66,6 +102,29 @@ class AuthController extends Controller
                     'type' => $request->type,
                 ]);
             } else {
+                // Check if email or username already exists (verified users only)
+                $emailExists = User::where('email', strtolower(trim($request->email)))
+                    ->whereNotNull('email_verified_at')
+                    ->exists();
+                
+                if ($emailExists) {
+                    return response()->json([
+                        'message' => 'Email already registered',
+                        'error' => 'The email address is already registered. Please use a different email or try logging in.'
+                    ], 409);
+                }
+
+                $usernameExists = User::where('username', $request->username)
+                    ->whereNotNull('email_verified_at')
+                    ->exists();
+                
+                if ($usernameExists) {
+                    return response()->json([
+                        'message' => 'Username already taken',
+                        'error' => 'The username is already taken. Please choose a different username.'
+                    ], 409);
+                }
+
                 // Create new user
                 $user = User::create([
                     'username' => $request->username,
@@ -99,6 +158,11 @@ class AuthController extends Controller
                 });
             } catch (Exception $e) {
                 Log::error('Verification OTP email failed: ' . $e->getMessage());
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Failed to send verification email',
+                    'error' => 'Unable to send OTP. Please try again later.'
+                ], 500);
             }
 
             DB::commit();
@@ -113,17 +177,24 @@ class AuthController extends Controller
             Log::error('Registration failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Registration failed',
-                'error' => $e->getMessage()
+                'error' => 'An unexpected error occurred. Please try again.'
             ], 500);
         }
     }
 
     public function verifyEmail(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email|exists:users,email',
-            'otp' => 'required|digits:6',
-        ]);
+        try {
+            $request->validate([
+                'email' => 'required|email|exists:users,email',
+                'otp' => 'required|digits:6',
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         $email = strtolower(trim($request->email));
 
@@ -149,20 +220,36 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // VALID OTP → VERIFY USER
-        $user = User::where('email', $email)->firstOrFail();
-        $user->email_verified_at = now();
-        $user->save();
+        try {
+            // VALID OTP → VERIFY USER
+            $user = User::where('email', $email)->firstOrFail();
+            
+            if ($user->email_verified_at) {
+                return response()->json([
+                    'message' => 'Email already verified',
+                    'error' => 'This email has already been verified. Please log in.'
+                ], 400);
+            }
+            
+            $user->email_verified_at = now();
+            $user->save();
 
-        DB::table('email_verification_tokens')->where('email', $email)->delete();
+            DB::table('email_verification_tokens')->where('email', $email)->delete();
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            $token = $user->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'message' => 'Email verified successfully',
-            'user' => $user->only(['id', 'username', 'email', 'type']),
-            'token' => $token,
-        ], 200);
+            return response()->json([
+                'message' => 'Email verified successfully',
+                'user' => $user->only(['id', 'username', 'email', 'type']),
+                'token' => $token,
+            ], 200);
+        } catch (Exception $e) {
+            Log::error('Email verification failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Verification failed',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
+        }
     }
 
     /**
@@ -170,9 +257,16 @@ class AuthController extends Controller
      */
     public function resendVerification(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email|exists:users,email'
-        ]);
+        try {
+            $request->validate([
+                'email' => 'required|email|exists:users,email'
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         $email = strtolower(trim($request->email));
         
@@ -181,46 +275,61 @@ class AuthController extends Controller
 
     private function resendVerificationOtp($email)
     {
-        $user = User::where('email', $email)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'error' => 'User not found',
-                'message' => 'No user found with this email address.'
-            ], 404);
-        }
-
-        // Generate new OTP
-        $otp = random_int(100000, 999999);
-        $expiresAt = now()->addMinutes($this->otpTtlMinutes);
-
-        DB::table('email_verification_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => (string) $otp,
-                'created_at' => now(),
-                'expires_at' => $expiresAt,
-            ]
-        );
-
         try {
-            Mail::send('emails.verify-otp', [
-                'otp' => $otp,
-                'username' => $user->username
-            ], function ($message) use ($user) {
-                $message->to($user->email)->subject('Your New OTP - Injera Platform');
-            });
+            $user = User::where('email', $email)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'error' => 'User not found',
+                    'message' => 'No user found with this email address.'
+                ], 404);
+            }
 
-            return response()->json([
-                'message' => 'New OTP sent successfully!',
-                'user' => $user->only(['id', 'username', 'email', 'type']),
-                'requires_verification' => true
-            ], 200);
+            if ($user->email_verified_at) {
+                return response()->json([
+                    'message' => 'Email already verified',
+                    'error' => 'This email has already been verified. Please log in.'
+                ], 400);
+            }
+
+            // Generate new OTP
+            $otp = random_int(100000, 999999);
+            $expiresAt = now()->addMinutes($this->otpTtlMinutes);
+
+            DB::table('email_verification_tokens')->updateOrInsert(
+                ['email' => $email],
+                [
+                    'token' => (string) $otp,
+                    'created_at' => now(),
+                    'expires_at' => $expiresAt,
+                ]
+            );
+
+            try {
+                Mail::send('emails.verify-otp', [
+                    'otp' => $otp,
+                    'username' => $user->username
+                ], function ($message) use ($user) {
+                    $message->to($user->email)->subject('Your New OTP - Injera Platform');
+                });
+
+                return response()->json([
+                    'message' => 'New OTP sent successfully!',
+                    'user' => $user->only(['id', 'username', 'email', 'type']),
+                    'requires_verification' => true
+                ], 200);
+            } catch (Exception $e) {
+                Log::error('Resend OTP failed: ' . $e->getMessage());
+                return response()->json([
+                    'message' => 'Failed to send OTP',
+                    'error' => 'Unable to send OTP. Please try again later.'
+                ], 500);
+            }
         } catch (Exception $e) {
-            Log::error('Resend OTP failed: ' . $e->getMessage());
+            Log::error('Resend verification failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to send OTP',
-                'error' => $e->getMessage()
+                'message' => 'Resend verification failed',
+                'error' => 'An unexpected error occurred. Please try again.'
             ], 500);
         }
     }
@@ -230,43 +339,57 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        $request->validate([
-            'login'    => 'required|string',
-            'password' => 'required',
-        ]);
-
-        $identifier = trim($request->login);
-        $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
-            ? User::where('email', strtolower($identifier))->first()
-            : User::where('username', $identifier)->first();
-
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'login' => ['The provided credentials are incorrect.'],
+        try {
+            $request->validate([
+                'login'    => 'required|string',
+                'password' => 'required',
             ]);
-        }
 
-        // Check if email is verified
-        if (is_null($user->email_verified_at)) {
+            $identifier = trim($request->login);
+            $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
+                ? User::where('email', strtolower($identifier))->first()
+                : User::where('username', $identifier)->first();
+
+            if (! $user || ! Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'message' => 'Invalid credentials',
+                    'error' => 'The provided credentials are incorrect.'
+                ], 401);
+            }
+
+            // Check if email is verified
+            if (is_null($user->email_verified_at)) {
+                return response()->json([
+                    'message' => 'Please verify your email to continue.',
+                    'requires_verification' => true,
+                    'user' => $user->only(['id', 'username', 'email', 'type']),
+                ], 403);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
             return response()->json([
-                'message' => 'Please verify your email to continue.',
-                'requires_verification' => true,
-                'user' => $user->only(['id', 'username', 'email', 'type']),
-            ], 403);
+                'message' => 'Login successful',
+                'user'    => [
+                    'id'       => $user->id,
+                    'username' => $user->username,
+                    'email'    => $user->email,
+                    'type'     => $user->type,
+                ],
+                'token'   => $token,
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (Exception $e) {
+            Log::error('Login failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Login failed',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
         }
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'message' => 'Login successful',
-            'user'    => [
-                'id'       => $user->id,
-                'username' => $user->username,
-                'email'    => $user->email,
-                'type'     => $user->type,
-            ],
-            'token'   => $token,
-        ]);
     }
 
     /**
@@ -274,9 +397,17 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-        return response()->json([
-            'user' => $request->user()
-        ]);
+        try {
+            return response()->json([
+                'user' => $request->user()
+            ]);
+        } catch (Exception $e) {
+            Log::error('Get user profile failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to retrieve user profile',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
+        }
     }
 
     /**
@@ -284,11 +415,19 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        try {
+            $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out successfully'
-        ]);
+            return response()->json([
+                'message' => 'Logged out successfully'
+            ]);
+        } catch (Exception $e) {
+            Log::error('Logout failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Logout failed',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
+        }
     }
 
     /**
@@ -296,54 +435,69 @@ class AuthController extends Controller
      */
     public function forget(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email|exists:users,email'
-        ]);
-
-        // Generate a 6-digit OTP
-        $otp = random_int(100000, 999999);
-
-        // Normalize email casing
-        $email = strtolower(trim($request->email));
-
-        // Resend cooldown: disallow new OTP within 60 seconds
-        $existing = DB::table('password_reset_tokens')->where('email', $email)->first();
-        if ($existing) {
-            $createdAt = Carbon::parse($existing->created_at);
-            $cooldownEnds = $createdAt->addSeconds(60);
-            if (Carbon::now()->lt($cooldownEnds)) {
-                $retryAfter = Carbon::now()->diffInSeconds($cooldownEnds) + 1;
-                return response()->json([
-                    'message' => 'OTP recently sent. Please wait before requesting a new OTP.',
-                    'retry_after' => $retryAfter
-                ], 429);
-            }
+        try {
+            $request->validate([
+                'email' => 'required|email|exists:users,email'
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         }
 
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => (string) $otp,
-                'created_at' => Carbon::now()
-            ]
-        );
-
         try {
-            $user = User::where('email', $email)->first();
-            $username = $user?->username ?? 'User';
-            Mail::send('emails.password-otp', ['otp' => $otp, 'username' => $username], function ($message) use ($email) {
-                $message->to($email)
-                        ->subject('Password Reset OTP - Injera Platform');
-            });
+            // Generate a 6-digit OTP
+            $otp = random_int(100000, 999999);
 
-            return response()->json([
-                'message' => 'Password reset OTP sent successfully'
-            ], 200);
+            // Normalize email casing
+            $email = strtolower(trim($request->email));
+
+            // Resend cooldown: disallow new OTP within 60 seconds
+            $existing = DB::table('password_reset_tokens')->where('email', $email)->first();
+            if ($existing) {
+                $createdAt = Carbon::parse($existing->created_at);
+                $cooldownEnds = $createdAt->addSeconds(60);
+                if (Carbon::now()->lt($cooldownEnds)) {
+                    $retryAfter = Carbon::now()->diffInSeconds($cooldownEnds) + 1;
+                    return response()->json([
+                        'message' => 'OTP recently sent. Please wait before requesting a new OTP.',
+                        'retry_after' => $retryAfter
+                    ], 429);
+                }
+            }
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $email],
+                [
+                    'token' => (string) $otp,
+                    'created_at' => Carbon::now()
+                ]
+            );
+
+            try {
+                $user = User::where('email', $email)->first();
+                $username = $user?->username ?? 'User';
+                Mail::send('emails.password-otp', ['otp' => $otp, 'username' => $username], function ($message) use ($email) {
+                    $message->to($email)
+                            ->subject('Password Reset OTP - Injera Platform');
+                });
+
+                return response()->json([
+                    'message' => 'Password reset OTP sent successfully'
+                ], 200);
+            } catch (Exception $e) {
+                Log::error('Password reset OTP email failed: ' . $e->getMessage());
+                return response()->json([
+                    'message' => 'Failed to send password reset OTP',
+                    'error' => 'Unable to send OTP. Please try again later.'
+                ], 500);
+            }
         } catch (Exception $e) {
-            Log::error('Password reset OTP email failed: ' . $e->getMessage());
+            Log::error('Forget password failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to send password reset OTP',
-                'error' => $e->getMessage()
+                'message' => 'Password reset failed',
+                'error' => 'An unexpected error occurred. Please try again.'
             ], 500);
         }
     }
@@ -353,48 +507,63 @@ class AuthController extends Controller
      */
     public function reset(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email|exists:users,email',
-            'otp' => 'required|digits:6',
-            'password' => 'required|min:6|confirmed',
-            'password_confirmation' => 'required'
-        ]);
-
-        // Normalize email casing
-        $email = strtolower(trim($request->email));
-
-        $record = DB::table('password_reset_tokens')->where([
-            'email' => $email,
-            'token' => $request->otp,
-        ])->first();
-
-        if (!$record) {
+        try {
+            $request->validate([
+                'email' => 'required|email|exists:users,email',
+                'otp' => 'required|digits:6',
+                'password' => 'required|min:6|confirmed',
+                'password_confirmation' => 'required'
+            ]);
+        } catch (ValidationException $e) {
             return response()->json([
-                'error' => 'Invalid OTP',
-                'message' => 'The provided OTP is invalid.'
-            ], 400);
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         }
 
-        // Check expiry (valid for $otpTtlMinutes minutes)
-        $createdAt = Carbon::parse($record->created_at);
-        if ($createdAt->lt(Carbon::now()->subMinutes($this->otpTtlMinutes))) {
+        try {
+            // Normalize email casing
+            $email = strtolower(trim($request->email));
+
+            $record = DB::table('password_reset_tokens')->where([
+                'email' => $email,
+                'token' => $request->otp,
+            ])->first();
+
+            if (!$record) {
+                return response()->json([
+                    'error' => 'Invalid OTP',
+                    'message' => 'The provided OTP is invalid.'
+                ], 400);
+            }
+
+            // Check expiry (valid for $otpTtlMinutes minutes)
+            $createdAt = Carbon::parse($record->created_at);
+            if ($createdAt->lt(Carbon::now()->subMinutes($this->otpTtlMinutes))) {
+                DB::table('password_reset_tokens')->where(['email' => $email])->delete();
+                return response()->json([
+                    'error' => 'Expired OTP',
+                    'message' => 'The OTP has expired. Please request a new one.'
+                ], 400);
+            }
+
+            User::where('email', $email)->update([
+                'password' => Hash::make($request->password)
+            ]);
+
+            // Invalidate OTP after successful reset
             DB::table('password_reset_tokens')->where(['email' => $email])->delete();
+
             return response()->json([
-                'error' => 'Expired OTP',
-                'message' => 'The OTP has expired. Please request a new one.'
-            ], 400);
+                'message' => 'Password reset successfully'
+            ], 200);
+        } catch (Exception $e) {
+            Log::error('Password reset failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Password reset failed',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
         }
-
-        User::where('email', $email)->update([
-            'password' => Hash::make($request->password)
-        ]);
-
-        // Invalidate OTP after successful reset
-        DB::table('password_reset_tokens')->where(['email' => $email])->delete();
-
-        return response()->json([
-            'message' => 'Password reset successfully'
-        ], 200);
     }
 
     /**
@@ -403,32 +572,55 @@ class AuthController extends Controller
      */
     public function changePassword(Request $request)
     {
-        $request->validate([
-            'current_password' => 'required|string',
-            'password'          => 'required|string|min:6|confirmed',
-            'password_confirmation' => 'required'
-        ]);
-    
-        $user = $request->user();
-    
-        // Verify current password
-        if (!Hash::check($request->current_password, $user->password)) {
+        try {
+            $request->validate([
+                'current_password' => 'required|string',
+                'password'          => 'required|string|min:6|confirmed',
+                'password_confirmation' => 'required'
+            ]);
+        } catch (ValidationException $e) {
             return response()->json([
-                'error' => 'Incorrect current password',
-                'message' => 'The current password you entered is wrong.'
-            ], 400);
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         }
-    
-        // Update password
-        $user->password = Hash::make($request->password);
-        $user->save();
-    
-        // Optional: Revoke all tokens so user must re-login (more secure)
-        $user->tokens()->delete();
-    
-        return response()->json([
-            'message' => 'Password changed successfully! Please log in again.',
-            'requires_relogin' => true
-        ], 200);
+
+        try {
+            $user = $request->user();
+
+            // Verify current password
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'error' => 'Incorrect current password',
+                    'message' => 'The current password you entered is wrong.'
+                ], 400);
+            }
+
+            // Check if new password is same as current password
+            if (Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'error' => 'Invalid new password',
+                    'message' => 'New password cannot be the same as current password.'
+                ], 400);
+            }
+
+            // Update password
+            $user->password = Hash::make($request->password);
+            $user->save();
+
+            // Optional: Revoke all tokens so user must re-login (more secure)
+            $user->tokens()->delete();
+
+            return response()->json([
+                'message' => 'Password changed successfully! Please log in again.',
+                'requires_relogin' => true
+            ], 200);
+        } catch (Exception $e) {
+            Log::error('Change password failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Password change failed',
+                'error' => 'An unexpected error occurred. Please try again.'
+            ], 500);
+        }
     }
 }
