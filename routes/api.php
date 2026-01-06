@@ -62,7 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::put('/orders/{order}', [OrderController::class, 'update']);
     Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
-    Route::get('/owen_videos', [AdvertiserProfileController::class, 'owen_videos']);
+    Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
     Route::get('/my-orders', [OrderController::class, 'my_orders']);
     Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
     Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
