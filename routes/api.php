@@ -81,3 +81,4 @@ Route::get('/categories', [AdController::class, 'getCategories'])->name('api.cat
 Route::get('/ads/feed', [AdFeedController::class, 'index']);
 Route::get('/ads/{ad}', [AdFeedController::class, 'show']);
 Route::get('/ads/{ad}/comments', [CommentController::class, 'index']);
+Route::get('/ads/{ad}/comments/{comment}/replies', [CommentController::class, 'replies']);
