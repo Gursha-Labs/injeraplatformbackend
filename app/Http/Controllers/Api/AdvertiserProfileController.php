@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdVideo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -10,18 +11,57 @@ use Illuminate\Support\Facades\Validator;
 
 class AdvertiserProfileController extends Controller
 {
-    public function show(Request $request)
-    {
-        $user = $request->user();
-        if ($user->type !== 'advertiser') {
-            return response()->json(['error' => 'Access denied'], 403);
-        }
+public function show(Request $request)
+{
+$user = Auth::user();
 
-        return response()->json([
-            'profile' => $user->advertiserProfile ?? null
-        ]);
-    }
+if ($user->type !== 'advertiser') {
+    return response()->json(['error' => 'Access denied'], 403);
+}
 
+$profile = $user->advertiserProfile;
+
+return response()->json([
+// user table
+'user_id' => $user->id,
+'username' => $user->username,
+'email' => $user->email,
+'type' => $user->type,
+'email_verified_at' => $user->email_verified_at,
+'user_created_at' => $user->created_at,
+'user_updated_at' => $user->updated_at,
+
+// advertiser_profiles table
+'advertiser_profile_id' => $profile->id ?? null,
+'company_name' => $profile->company_name ?? null,
+'business_email' => $profile->business_email ?? null,
+'phone_number' => $profile->phone_number ?? null,
+'website' => $profile->website ?? null,
+'logo' => $profile->logo ?? null,
+'profile_picture' => $profile->profile_picture ?? null,
+'cover_image' => $profile->cover_image ?? null,
+'description' => $profile->description ?? null,
+'country' => $profile->country ?? null,
+'city' => $profile->city ?? null,
+'address' => $profile->address ?? null,
+'social_media_links' => $profile->social_media_links ?? [],
+'total_ads_uploaded' => $profile->total_ads_uploaded ?? 0,
+'total_ad_views' => $profile->total_ad_views ?? 0,
+'total_spent' => $profile->total_spent ?? "0.00",
+'subscription_plan' => $profile->subscription_plan ?? null,
+'subscription_active' => $profile->subscription_active ?? false,
+'notifications_enabled' => $profile->notifications_enabled ?? false,
+'email_notifications' => $profile->email_notifications ?? false,
+'is_active' => $profile->is_active ?? false,
+'last_active_at' => $profile->last_active_at ?? null,
+'advertiser_created_at' => $profile->created_at ?? null,
+'advertiser_updated_at' => $profile->updated_at ?? null
+
+
+]);
+
+
+}
     public function update(Request $request)
     {
         $user = $request->user();
@@ -117,22 +157,31 @@ class AdvertiserProfileController extends Controller
     return response()->json($ads);
 }
 
-  public function my_video($id){
-    $user = Auth::user();
 
-    if ($user->type !== 'advertiser') {
-        return response()->json(['error' => 'You are not advertiser'], 403);
-    }
+   public function get_video_by_id($id){
+     
+     $advido = AdVideo::findOrFail($id);
 
-    $advertiser = $user->advertiserProfile;
+        return response()->json([
+            'ad_video_id' => $advido->id,
+            'title' => $advido->title,
+            'description' => $advido->description,
+            'video_url' => $advido->video_url,
+            'thumbnail_url' => $advido->thumbnail_url,
+            'views' => $advido->views->count(),
+            'likes' => $advido->likes,
+            'shares' => $advido->shares,
+            'comments_count' => $advido->comments()->count(),
+            'created_at' => $advido->created_at,
+            'updated_at' => $advido->updated_at,
+        ]);
 
-    $ads = $advertiser->adVideos()->where('id',$id)->first();
 
-    return response()->json($ads);
-  }
+   }
 
 
 
+ 
     public function deleteProfilePicture(Request $request)
     {
         $user = $request->user();

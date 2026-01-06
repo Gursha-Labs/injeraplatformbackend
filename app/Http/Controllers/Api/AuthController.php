@@ -26,161 +26,183 @@ class AuthController extends Controller
     /**
      * Unified registration with email OTP verification
      */
-    public function register(Request $request)
-    {
-        try {
-            $request->validate([
-                'username' => [
-                    'required',
-                    'string',
-                    'max:100',
-                    Rule::unique('users')->where(function ($query) {
-                        return $query->whereNotNull('email_verified_at');
-                    })
-                ],
-                'email'    => [
-                    'required',
-                    'email',
-                    Rule::unique('users')->where(function ($query) {
-                        return $query->whereNotNull('email_verified_at');
-                    })
-                ],
-                'password' => 'required|string|min:6',
-                'type'     => 'required|in:user,advertiser',
-            ]);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $e->errors(),
-            ], 422);
-        }
+public function register(Request $request)
+{
+    try {
+        $request->validate([
+            'username' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('users')->where(function ($query) {
+                    return $query->whereNotNull('email_verified_at');
+                })
+            ],
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users')->where(function ($query) {
+                    return $query->whereNotNull('email_verified_at');
+                })
+            ],
+            'password' => 'required|string|min:6',
+            'type' => 'required|in:user,advertiser',
+        ]);
+    } catch (ValidationException $e) {
+        return response()->json([
+            'message' => 'Validation failed',
+            'errors' => $e->errors(),
+        ], 422);
+    }
 
-        DB::beginTransaction();
-        try {
-            // Check if unverified user exists with same email or username
-            $existingUnverifiedUser = User::where(function ($query) use ($request) {
-                $query->where('email', strtolower(trim($request->email)))
-                      ->orWhere('username', $request->username);
-            })->whereNull('email_verified_at')->first();
+    DB::beginTransaction();
 
-            if ($existingUnverifiedUser) {
-                // Check if this is the same user trying to register again (allow re-registration for unverified users)
-                $user = $existingUnverifiedUser;
-                
-                // Check if username/email is already taken by a verified user
-                if ($user->email !== strtolower(trim($request->email))) {
-                    $emailExists = User::where('email', strtolower(trim($request->email)))
-                        ->whereNotNull('email_verified_at')
-                        ->exists();
-                    
-                    if ($emailExists) {
-                        return response()->json([
-                            'message' => 'Email already registered',
-                            'error' => 'The email address is already registered by another user.'
-                        ], 409);
-                    }
-                }
+    try {
+        $existingUnverifiedUser = User::where(function ($query) use ($request) {
+            $query->where('email', strtolower(trim($request->email)))
+                  ->orWhere('username', $request->username);
+        })->whereNull('email_verified_at')->first();
 
-                if ($user->username !== $request->username) {
-                    $usernameExists = User::where('username', $request->username)
-                        ->whereNotNull('email_verified_at')
-                        ->exists();
-                    
-                    if ($usernameExists) {
-                        return response()->json([
-                            'message' => 'Username already taken',
-                            'error' => 'The username is already taken by another user.'
-                        ], 409);
-                    }
-                }
+        if ($existingUnverifiedUser) {
+            $user = $existingUnverifiedUser;
 
-                // Update existing unverified user
-                $user->update([
-                    'username' => $request->username,
-                    'email' => strtolower(trim($request->email)),
-                    'password' => Hash::make($request->password),
-                    'type' => $request->type,
-                ]);
-            } else {
-                // Check if email or username already exists (verified users only)
+            if ($user->email !== strtolower(trim($request->email))) {
                 $emailExists = User::where('email', strtolower(trim($request->email)))
                     ->whereNotNull('email_verified_at')
                     ->exists();
-                
+
                 if ($emailExists) {
                     return response()->json([
                         'message' => 'Email already registered',
-                        'error' => 'The email address is already registered. Please use a different email or try logging in.'
+                        'error' => 'The email address is already registered by another user.'
                     ], 409);
                 }
+            }
 
+            if ($user->username !== $request->username) {
                 $usernameExists = User::where('username', $request->username)
                     ->whereNotNull('email_verified_at')
                     ->exists();
-                
+
                 if ($usernameExists) {
                     return response()->json([
                         'message' => 'Username already taken',
-                        'error' => 'The username is already taken. Please choose a different username.'
+                        'error' => 'The username is already taken by another user.'
                     ], 409);
                 }
-
-                // Create new user
-                $user = User::create([
-                    'username' => $request->username,
-                    'email' => strtolower(trim($request->email)),
-                    'password' => Hash::make($request->password),
-                    'type' => $request->type,
-                ]);
             }
 
-            // Generate OTP
-            $otp = random_int(100000, 999999);
-            $expiresAt = now()->addMinutes($this->otpTtlMinutes);
+            $user->update([
+                'username' => $request->username,
+                'email' => strtolower(trim($request->email)),
+                'password' => Hash::make($request->password),
+                'type' => $request->type,
+            ]);
+        } else {
+            $emailExists = User::where('email', strtolower(trim($request->email)))
+                ->whereNotNull('email_verified_at')
+                ->exists();
 
-            DB::table('email_verification_tokens')->updateOrInsert(
-                ['email' => $user->email],
+            if ($emailExists) {
+                return response()->json([
+                    'message' => 'Email already registered',
+                    'error' => 'The email address is already registered. Please use a different email or try logging in.'
+                ], 409);
+            }
+
+            $usernameExists = User::where('username', $request->username)
+                ->whereNotNull('email_verified_at')
+                ->exists();
+
+            if ($usernameExists) {
+                return response()->json([
+                    'message' => 'Username already taken',
+                    'error' => 'The username is already taken. Please choose a different username.'
+                ], 409);
+            }
+
+            $user = User::create([
+                'username' => $request->username,
+                'email' => strtolower(trim($request->email)),
+                'password' => Hash::make($request->password),
+                'type' => $request->type,
+            ]);
+        }
+
+        if ($user->type === 'advertiser') {
+            AdvertiserProfile::firstOrCreate(
+                ['user_id' => $user->id],
                 [
-                    'token'      => (string) $otp,
-                    'created_at' => now(),
-                    'expires_at' => $expiresAt,
+                    'company_name' => 'Pending',
+                    'phone_number' => 'Pending',
+                    'country' => 'Pending',
+                    'city' => 'Pending',
+
+                    'subscription_plan' => 'free',
+                    'subscription_active' => false,
+                    'account_status' => 'pending',
+
+                    'notifications_enabled' => true,
+                    'email_notifications' => true,
+
+                    'total_ads_uploaded' => 0,
+                    'total_ad_views' => 0,
+                    'total_ad_likes' => 0,
+                    'total_ad_shares' => 0,
+                    'total_spent' => 0,
+
+                    'is_active' => true,
                 ]
             );
+        }
 
-            // Send email
-            try {
-                Mail::send('emails.verify-otp', [
-                    'otp' => $otp,
-                    'username' => $user->username
-                ], function ($message) use ($user) {
-                    $message->to($user->email)
-                            ->subject('Verify Your Email - Injera Platform');
-                });
-            } catch (Exception $e) {
-                Log::error('Verification OTP email failed: ' . $e->getMessage());
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Failed to send verification email',
-                    'error' => 'Unable to send OTP. Please try again later.'
-                ], 500);
-            }
+        $otp = random_int(100000, 999999);
+        $expiresAt = now()->addMinutes($this->otpTtlMinutes);
 
-            DB::commit();
+        DB::table('email_verification_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'token' => (string) $otp,
+                'created_at' => now(),
+                'expires_at' => $expiresAt,
+            ]
+        );
 
-            return response()->json([
-                'message' => 'Registration initiated. An OTP has been sent to your email.',
-                'user'    => $user->only(['id', 'username', 'email', 'type']),
-                'requires_verification' => true,
-            ], 201);
+        try {
+            Mail::send('emails.verify-otp', [
+                'otp' => $otp,
+                'username' => $user->username
+            ], function ($message) use ($user) {
+                $message->to($user->email)
+                        ->subject('Verify Your Email - Injera Platform');
+            });
         } catch (Exception $e) {
+            Log::error('Verification OTP email failed: ' . $e->getMessage());
             DB::rollBack();
-            Log::error('Registration failed: ' . $e->getMessage());
+
             return response()->json([
-                'message' => 'Registration failed',
-                'error' => 'An unexpected error occurred. Please try again.'
+                'message' => 'Failed to send verification email',
+                'error' => 'Unable to send OTP. Please try again later.'
             ], 500);
         }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Registration initiated. An OTP has been sent to your email.',
+            'user' => $user->only(['id', 'username', 'email', 'type']),
+            'requires_verification' => true,
+        ], 201);
+    } catch (Exception $e) {
+        DB::rollBack();
+        Log::error('Registration failed: ' . $e->getMessage());
+
+        return response()->json([
+            'message' => 'Registration failed',
+            'error' => 'An unexpected error occurred. Please try again.'
+        ], 500);
     }
+}
 
     public function verifyEmail(Request $request)
     {
