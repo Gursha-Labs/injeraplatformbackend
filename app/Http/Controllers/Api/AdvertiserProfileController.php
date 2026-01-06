@@ -97,18 +97,40 @@ class AdvertiserProfileController extends Controller
 
 
 
-    public function owen_videos(){
-        $user = Auth::user();
-        if ($user->type !== 'advertiser') {
-            return response()->json(['error' => 'Access denied'], 403);
-        }
+  public function owen_videos(Request $request)
+{
+    $user = Auth::user();
 
-        $ads = $user->adVideos()->with([])->get();
-
-        return response()->json([
-            'ads' => $ads
-        ]);
+    if ($user->type !== 'advertiser') {
+        return response()->json(['error' => 'You are not advertiser'], 403);
     }
+
+    $advertiser = $user->advertiserProfile;
+
+    $perPage = $request->input('per_page', 10);
+
+    $ads = $advertiser
+        ->adVideos()
+        ->orderByDesc('created_at')
+        ->paginate($perPage);
+
+    return response()->json($ads);
+}
+
+  public function my_video($id){
+    $user = Auth::user();
+
+    if ($user->type !== 'advertiser') {
+        return response()->json(['error' => 'You are not advertiser'], 403);
+    }
+
+    $advertiser = $user->advertiserProfile;
+
+    $ads = $advertiser->adVideos()->where('id',$id)->first();
+
+    return response()->json($ads);
+  }
+
 
 
     public function deleteProfilePicture(Request $request)

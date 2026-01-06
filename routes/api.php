@@ -48,6 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
+    Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
+
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
     // Search videos
@@ -62,7 +64,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::put('/orders/{order}', [OrderController::class, 'update']);
     Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
-    Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
     Route::get('/my-orders', [OrderController::class, 'my_orders']);
     Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
     Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
