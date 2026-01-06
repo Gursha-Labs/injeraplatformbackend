@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -93,6 +94,22 @@ class AdvertiserProfileController extends Controller
             'total_views' => $profile->total_ad_views,
         ]);
     }
+
+
+
+    public function owen_videos(){
+        $user = Auth::user();
+        if ($user->type !== 'advertiser') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $ads = $user->adVideos()->with([])->get();
+
+        return response()->json([
+            'ads' => $ads
+        ]);
+    }
+
 
     public function deleteProfilePicture(Request $request)
     {
