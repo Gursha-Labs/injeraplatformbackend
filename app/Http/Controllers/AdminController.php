@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\AdVideo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class AdminController extends Controller
 {
@@ -72,5 +73,36 @@ class AdminController extends Controller
                 ]
             ]
         ]);
+    }
+
+    public function block_user($userId)
+    {
+        $admin = Auth::user();
+
+        // Only admin can block users
+        if ($admin->type !== 'admin') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $user = User::findOrFail($userId);
+        $user->is_blocking = true;
+        $user->save();
+
+        return response()->json(['success' => true, 'message' => 'User has been blocked.']);
+    }
+    public function unblock_user($userId)
+    {
+        $admin = Auth::user();
+
+        // Only admin can unblock users
+        if ($admin->type !== 'admin') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $user = User::findOrFail($userId);
+        $user->is_blocking = false;
+        $user->save();
+
+        return response()->json(['success' => true, 'message' => 'User has been unblocked.']);
     }
 }

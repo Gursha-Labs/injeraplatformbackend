@@ -48,6 +48,8 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
+    Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
+    Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
 
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
@@ -63,6 +65,7 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
+
     // Orders
     Route::prefix('orders')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
