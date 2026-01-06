@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\RecentSearchController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -58,6 +59,7 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
     // Search videos
     Route::get("/seach-video/{search_term}",[AdController::class,"search_ads"]);
+    Route::get('/recent-searches', [RecentSearchController::class, 'recent_searches']);
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
