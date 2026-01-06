@@ -9,6 +9,8 @@ use Illuminate\Support\Str;
 use App\Models\Tag;
 use App\Models\Category;
 use App\Models\ProductVariant;
+use App\Models\RecentSearch;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -24,72 +26,89 @@ class AdController extends Controller
  protected $tagSearchable = ['name'];
 protected $videoSearchable = ['title', 'description', 'video_url'];
 
-public function search_ads(Request $request)
+public function search_ads(Request $request, $search_term = null)
 {
-     try {
-     $videoIdsQuery = AdVideo::query()
-     ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
-     ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
-     ->select('ad_videos.id')
-     ->distinct();
-     
-    if ($request->filled('q')) {
-        $searchTerm = $request->input('q');
+    try {
+        $videoIdsQuery = AdVideo::query()
+            ->join('video_tags', 'ad_videos.id', '=', 'video_tags.video_id')
+            ->join('tags', 'video_tags.tag_id', '=', 'tags.id')
+            ->select('ad_videos.id')
+            ->distinct();
         
-        $videoIdsQuery->where(function ($q) use ($searchTerm) {
-            foreach ($this->tagSearchable as $field) {
-                $q->orWhere("tags.$field", 'LIKE', '%' . $searchTerm . '%');
+        if ($search_term) {
+            // Handle recent searches for authenticated user
+            if ($user = $request->user()) {
+                // Avoid duplicates: if search exists, update timestamp
+                RecentSearch::updateOrCreate(
+                    ['user_id' => $user->id, 'keyword' => $search_term],
+                    ['created_at' => now()]
+                );
+
+                // Keep only latest 5 searches
+                $count = RecentSearch::where('user_id', $user->id)->count();
+                if ($count > 5) {
+                    $oldest = RecentSearch::where('user_id', $user->id)
+                        ->orderBy('created_at', 'asc')
+                        ->first();
+                    $oldest->delete();
+                }
             }
 
-            foreach ($this->videoSearchable as $field) {
-                $q->orWhere("ad_videos.$field", 'LIKE', '%' . $searchTerm . '%');
-            }
-        });
-    }
+            $videoIdsQuery->where(function ($q) use ($search_term) {
+                foreach ($this->tagSearchable as $field) {
+                    $q->orWhere("tags.$field", 'LIKE', '%' . $search_term . '%');
+                }
 
-    $videoIds = $videoIdsQuery->pluck('id');
-    
-    if ($videoIds->isEmpty()) {
+                foreach ($this->videoSearchable as $field) {
+                    $q->orWhere("ad_videos.$field", 'LIKE', '%' . $search_term . '%');
+                }
+            });
+        }
+
+        $videoIds = $videoIdsQuery->pluck('id');
+        
+        if ($videoIds->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'No ads found matching the search criteria.'
+            ], 404);
+        }
+
+        $perPage = $request->input('per_page', 15);
+        $page = $request->input('page', 1);
+        
+        $paginatedResults = AdVideo::whereIn('id', $videoIds)
+            ->paginate($perPage, ['*'], 'page', $page);
+
         return response()->json([
             'success' => true,
-            'data' => [],
-            'message' => 'No ads found matching the search criteria.'
-        ], 404);
+            'data' => $paginatedResults->items(),
+            'pagination' => [
+                'current_page' => $paginatedResults->currentPage(),
+                'last_page' => $paginatedResults->lastPage(),
+                'per_page' => $paginatedResults->perPage(),
+                'total' => $paginatedResults->total(),
+                'from' => $paginatedResults->firstItem(),
+                'to' => $paginatedResults->lastItem(),
+                'has_more_pages' => $paginatedResults->hasMorePages(),
+                'has_previous_pages' => $paginatedResults->currentPage() > 1,
+                'next_page_url' => $paginatedResults->nextPageUrl(),
+                'previous_page_url' => $paginatedResults->previousPageUrl(),
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Search Ads Error: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to search ads',
+            'error' => $e->getMessage()
+        ], 500);
     }
-
-    $perPage = $request->input('per_page', 15);
-    $page = $request->input('page', 1);
-    
-    $paginatedResults = AdVideo::whereIn('id', $videoIds)
-        ->paginate($perPage, ['*'], 'page', $page);
-
-    return response()->json([
-        'success' => true,
-        'data' => $paginatedResults->items(),
-        'pagination' => [
-            'current_page' => $paginatedResults->currentPage(),
-            'last_page' => $paginatedResults->lastPage(),
-            'per_page' => $paginatedResults->perPage(),
-            'total' => $paginatedResults->total(),
-            'from' => $paginatedResults->firstItem(),
-            'to' => $paginatedResults->lastItem(),
-            'has_more_pages' => $paginatedResults->hasMorePages(),
-            'has_previous_pages' => $paginatedResults->currentPage() > 1,
-            'next_page_url' => $paginatedResults->nextPageUrl(),
-            'previous_page_url' => $paginatedResults->previousPageUrl(),
-        ]
-    ]);
-
-} catch (\Exception $e) {
-    Log::error('Search Ads Error: ' . $e->getMessage());
-
-    return response()->json([
-        'success' => false,
-        'message' => 'Failed to search ads',
-        'error' => $e->getMessage()
-    ], 500);
 }
-}
+
 
     public function getCategories()
     {

@@ -15,6 +15,7 @@ class User extends Authenticatable
     public $incrementing = false;
 
     protected $fillable = [
+        'is_blocking',
         'username',
         'email',
         'password',
@@ -28,6 +29,7 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
+        'is_blocking' => 'boolean',
         'email_verified_at' => 'datetime',
     ];
 

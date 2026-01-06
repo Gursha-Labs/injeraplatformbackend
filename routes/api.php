@@ -23,7 +23,7 @@ Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('th
 
 
 // Protected Routes
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum','blocked'])->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
