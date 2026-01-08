@@ -38,4 +38,8 @@ class AdVideo extends Model
     {
         return $this->hasMany(AdView::class, 'ad_id', 'id');
     }
+    public function productVariant()
+    {
+        return $this->hasMany(ProductVariant::class, 'video_id', 'id');
+    }
 }

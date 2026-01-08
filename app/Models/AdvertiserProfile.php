@@ -59,4 +59,8 @@ class AdvertiserProfile extends Model
             'view'   => $this->increment('total_ad_views'),
         };
     }
+    public function adVideos()
+    {
+        return $this->hasMany(AdVideo::class, 'advertiser_id', 'user_id');
+    }
 }
