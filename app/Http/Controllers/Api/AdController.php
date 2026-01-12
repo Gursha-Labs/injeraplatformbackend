@@ -72,7 +72,7 @@ public function search_ads(Request $request, $search_term = null)
                 'success' => true,
                 'data' => [],
                 'message' => 'No ads found matching the search criteria.'
-            ], 404);
+            ], 200);
         }
 
         $perPage = $request->input('per_page', 15);
