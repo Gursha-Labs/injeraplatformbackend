@@ -121,6 +121,8 @@ return response()->json([
         }
 
         $profile = $user->advertiserProfile;
+        $videosCount = $user->advertiserProfile->adVideos()->count();
+        $videos = $user->advertiserProfile->adVideos()->get();
 
         return response()->json([
             'company_name' => $profile->company_name,
@@ -133,6 +135,16 @@ return response()->json([
             'country' => $profile->country,
             'total_ads' => $profile->total_ads_uploaded,
             'total_views' => $profile->total_ad_views,
+            'videos_count' => $videosCount,
+            'videos' => $videos->map(function ($video) {
+                return [
+                    'id' => $video->id,
+                    'title' => $video->title,
+                    'thumbnail_url' => $video->thumbnail_url ? Storage::url($video->thumbnail_url) : null,
+                    'video_url' => $video->video_url ? Storage::url($video->video_url) : null,
+                    'views' => $video->views()->count(),
+                ];
+            }),
         ]);
     }
 
