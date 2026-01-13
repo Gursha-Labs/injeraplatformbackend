@@ -140,8 +140,8 @@ return response()->json([
                 return [
                     'id' => $video->id,
                     'title' => $video->title,
-                    'thumbnail_url' => $video->thumbnail_url ? Storage::url($video->thumbnail_url) : null,
-                    'video_url' => $video->video_url ? Storage::url($video->video_url) : null,
+                    'thumbnail_url' => $video->thumbnail_url ,
+                    'video_url' => $video->video_url ,
                     'views' => $video->views()->count(),
                 ];
             }),
