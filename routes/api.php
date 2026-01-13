@@ -38,7 +38,7 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
 
     // Advertiser Profile
     Route::get('/profile/advertiser', [AdvertiserProfileController::class, 'show']);
-    Route::put('/profile/advertiser', [AdvertiserProfileController::class, 'update']);
+    Route::post('/profile/advertiser', [AdvertiserProfileController::class, 'update']);
     Route::get('/advertiser/public/{userId}', [AdvertiserProfileController::class, 'publicProfile']);
     Route::delete('/profile/advertiser/picture', [AdvertiserProfileController::class, 'deleteProfilePicture']);
     Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
