@@ -34,8 +34,7 @@ class AdminController extends Controller
         $totalPointsDistributed = User::sum('points');
 
         // LISTS (with pagination)
-        $allUsers = User::select('id', 'username', 'email', 'type', 'email_verified_at', 'created_at')
-            ->orderBy('created_at', 'desc')
+        $allUsers = User::orderBy('created_at', 'desc')
             ->paginate(20);
 
         $regularUsers = User::where('type', 'user')
@@ -85,8 +84,13 @@ class AdminController extends Controller
         }
 
         $user = User::findOrFail($userId);
+        if($user->type =="admin"){
+            return response()->json(['error'=>"Admin can't be blocked"]);
+        } else{
         $user->is_blocking = true;
         $user->save();
+        }
+    
 
         return response()->json(['success' => true, 'message' => 'User has been blocked.']);
     }
