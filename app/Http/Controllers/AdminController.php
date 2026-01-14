@@ -85,8 +85,13 @@ class AdminController extends Controller
         }
 
         $user = User::findOrFail($userId);
+        if($user->type =="admin"){
+            return response()->json(['error'=>"Admin can't be blocked"]);
+        } else{
         $user->is_blocking = true;
         $user->save();
+        }
+    
 
         return response()->json(['success' => true, 'message' => 'User has been blocked.']);
     }
