@@ -34,8 +34,7 @@ class AdminController extends Controller
         $totalPointsDistributed = User::sum('points');
 
         // LISTS (with pagination)
-        $allUsers = User::select('id', 'username', 'email', 'type', 'email_verified_at', 'created_at')
-            ->orderBy('created_at', 'desc')
+        $allUsers = User::orderBy('created_at', 'desc')
             ->paginate(20);
 
         $regularUsers = User::where('type', 'user')
