@@ -388,8 +388,14 @@ public function register(Request $request)
                 ], 403);
             }
 
+            if(!$user->is_blocking){
             $token = $user->createToken('auth_token')->plainTextToken;
-
+        } else {
+            return response()->json([
+                'message' => 'Account blocked',
+                'error' => 'This account has been blocked. Please contact support.'
+            ], 403);
+        }
             return response()->json([
                 'message' => 'Login successful',
                 'user'    => [
