@@ -65,7 +65,7 @@ public function search_ads(Request $request, $search_term = null)
             });
         }
 
-        $videoIds = $videoIdsQuery->pluck('id');
+        $videoIds = $videoIdsQuery->pluck('id');    
         
         if ($videoIds->isEmpty()) {
             return response()->json([
