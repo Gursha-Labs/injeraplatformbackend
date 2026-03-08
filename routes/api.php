@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Game_playerController;
 use App\Http\Controllers\RecentSearchController;
 
 // Authentication Routes
@@ -50,7 +51,10 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
     Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
     Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
-
+    Route::prefix('spin-wheel')->group(function () {
+        // Spin the wheel
+        Route::post('spin', [Game_playerController::class, 'spin']);
+    });
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
 
