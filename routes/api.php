@@ -24,11 +24,7 @@ Route::post('/resend-verification', [AuthController::class, 'resendVerification'
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
-Route::group(['prefix' => 'public'], function () {
-    Route::get('/reward', [RewardsController::class, 'show']);
-    Route::get('/reward/{id}', [RewardsController::class, 'showOne']);
-    Route::put('/reward/{id}', [RewardsController::class, 'update']);
-});
+Route::group(['prefix' => 'public'], function () {});
 
 // Protected Routes
 Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
@@ -86,6 +82,9 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
         Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
         Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
     });
+    Route::get('/reward', [RewardsController::class, 'show']);
+    Route::get('/reward/{id}', [RewardsController::class, 'showOne']);
+    Route::put('/reward/{id}', [RewardsController::class, 'update']);
 });
 
 
