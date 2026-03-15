@@ -15,6 +15,7 @@ class AdViewController extends Controller
         $request->validate([
             'watched_percentage' => 'required|integer|min:0|max:100'
         ]);
+        $earnpoint = DB::table('variables')->where('point', 'earn_point')->value('value') ?? 5;
 
         $user = $request->user();
         $percentage = $request->watched_percentage;
@@ -24,7 +25,7 @@ class AdViewController extends Controller
             return AdView::updateOrCreate(
                 [
                     'ad_id' => $ad->id,
-                    'user_id' => $user->id
+                    'user_id' => $user->id 
                 ],
                 [
                     'watched_percentage' => $percentage,
@@ -35,7 +36,7 @@ class AdViewController extends Controller
 
         // GIVE POINTS ONLY ONCE WHEN ≥90%
         if ($percentage >= 90 && !$view->rewarded) {
-            $user->increment('points', 5);
+            $user->increment('points', $earnpoint);
             $ad->increment('view_count');
             
             $view->update(['rewarded' => true]);
@@ -43,9 +44,9 @@ class AdViewController extends Controller
             return response()->json([
                 'success' => true,
                 'rewarded' => true,
-                'points_earned' => 5,
+                'points_earned' => $earnpoint,
                 'total_points' => $user->fresh()->points,
-                'message' => 'Full view completed! +5 points earned'
+                'message' => 'Full view completed! +' . $earnpoint . ' points earned'
             ]);
         }
 

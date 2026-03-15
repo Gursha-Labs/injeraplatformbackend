@@ -18,7 +18,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminSeeder::class,
             CategorySeeder::class,
-            RewardSeeder::class
+            RewardSeeder::class,
+            VariableSeeder::class
         ]);
     }
 }

@@ -16,6 +16,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Game_playerController;
 use App\Http\Controllers\RecentSearchController;
 use App\Http\Controllers\RewardsController;
+use App\Http\Controllers\VariablesController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -82,9 +83,13 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
         Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
         Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
     });
+    //Rewards
     Route::get('/reward', [RewardsController::class, 'show']);
     Route::get('/reward/{id}', [RewardsController::class, 'showOne']);
     Route::put('/reward/{id}', [RewardsController::class, 'update']);
+    Route::get('/variables', [VariablesController::class, 'show']);
+    Route::get('/variables/{id}', [VariablesController::class, 'showOne']);
+    Route::put('/variables/{id}', [VariablesController::class, 'update']);
 });
 
 
