@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Game_player;
+use App\Models\Variables;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class Game_playerController extends Controller
@@ -36,53 +38,89 @@ public function spin(Request $request)
 {
     $user = auth()->user();
     $gameId = $request->game_id;
-    $betAmount = $request->bet_amount;
 
-    // Get or create game player record
+    $betAmount = Variables::where('type', 'bet_point')->first()->value;
+
+    if ($betAmount > $user->point) {
+        return response()->json([
+            'error' => 'Insufficient points to place the bet'
+        ], 400);
+    }
+
     $gamePlayer = Game_Player::firstOrCreate([
         'user_id' => $user->id,
         'game_id' => $gameId
     ]);
 
-    // Check if player is active and not banned (but ALLOWED to play even if is_allowed=false)
     if (!$gamePlayer->is_active || $gamePlayer->is_banned) {
-        return response()->json(['error' => 'You are not allowed to play this game'], 403);
+        return response()->json([
+            'error' => 'You are not allowed to play this game'
+        ], 403);
     }
 
-    // Determine if this spin wins - but only if is_allowed is true
-    $isWinner = false;
-    $winResult = [
-        'is_winner' => false,
-        'rarity_level' => 'none',
-        'probability' => 0,
-        'multiplier' => 0
-    ];
-    
-    // ONLY check for win if is_allowed is true
-    if ($gamePlayer->is_allowed) {
-        $winResult = $gamePlayer->determineWinAdvanced();
-        $isWinner = $winResult['is_winner'];
-    } else {
-        // Log that player is not allowed to win
-     Log::info("Player {$user->id} is not allowed to win (is_allowed=false), but can still play");
+    $user->point = $user->point - $betAmount;
+    $user->save();
+
+    $rewards = DB::table('rewards')
+        ->where('is_active', true)
+        ->get()
+        ->values();
+
+    if ($rewards->count() == 0) {
+        return response()->json([
+            'error' => 'No rewards configured'
+        ], 500);
     }
-    
-    // Calculate win amount based on bet and rarity
-    $winAmount = $isWinner 
-        ? $betAmount * $winResult['multiplier'] 
+
+    if (!$gamePlayer->is_allowed) {
+        $selectedReward = $rewards->firstWhere('type', 'lose');
+    } else {
+
+        $totalProbability = $rewards->sum('probability');
+        $rand = rand(1, $totalProbability);
+
+        $current = 0;
+
+        foreach ($rewards as $reward) {
+
+            $current += $reward->probability;
+
+            if ($rand <= $current) {
+                $selectedReward = $reward;
+                break;
+            }
+        }
+    }
+
+    $rewardIndex = $rewards->search(function ($item) use ($selectedReward) {
+        return $item->id === $selectedReward->id;
+    });
+
+    $isWinner = $selectedReward->type !== 'lose';
+
+    $winAmount = $isWinner
+        ? $betAmount * $selectedReward->value
         : 0;
 
-    // Update player statistics
+    if ($isWinner) {
+        $user->point = $user->point + $winAmount;
+        $user->save();
+    }
+
     $gamePlayer->updateAfterSpin($isWinner, $betAmount, $winAmount);
 
     return response()->json([
+        'segment_index' => $rewardIndex,
+        'reward_id' => $selectedReward->id,
+        'reward_name' => $selectedReward->name,
+        'reward_type' => $selectedReward->type,
+        'reward_value' => $selectedReward->value,
         'is_winner' => $isWinner,
         'win_amount' => $winAmount,
-        'rarity' => $winResult['rarity_level'] ?? 'none',
-        'is_allowed' => $gamePlayer->is_allowed, // Return this so frontend knows
-        'message' => $isWinner 
-            ? "Congratulations! You won {$winAmount}!" 
-            : "Better luck next time!"
+        'user_points' => $user->point,
+        'message' => $isWinner
+            ? "You won {$selectedReward->name}"
+            : "Better luck next time"
     ]);
 }
     /**

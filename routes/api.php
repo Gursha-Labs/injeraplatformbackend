@@ -49,7 +49,6 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
 
     // Unified Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
-
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
     Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
     Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
@@ -59,10 +58,8 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     });
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
-
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
-
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
     // Search videos
@@ -71,7 +68,6 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
-
     // Orders
     Route::prefix('orders')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
@@ -94,8 +90,6 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
 
 
 Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
-
-
 // Public Routes
 Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed

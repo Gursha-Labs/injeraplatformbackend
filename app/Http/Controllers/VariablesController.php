@@ -47,13 +47,11 @@ class VariablesController extends Controller
         if (!$variable) {
             return response()->json(['error' => 'Variable not found'], 404);
         }
-
         $rules = [
             'point' => 'required',
             'type' => 'sometimes|in:earn_point,bet_point',
             'value' => 'required',
         ];
-
         $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
