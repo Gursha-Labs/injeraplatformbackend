@@ -40,52 +40,54 @@ public function spin(Request $request)
     $user = Auth::user();
     $gameId = $request->game_id;
 
+    // Get bet amount
     $betAmount = Variables::where('type', 'bet_point')->first()->value;
 
+    // Check if user has enough points
     if ($betAmount > $user->point) {
         return response()->json([
             'error' => 'Insufficient points to place the bet'
         ], 400);
     }
 
+    // Get or create game player
     $gamePlayer = Game_Player::firstOrCreate([
         'user_id' => $user->id,
         'game_id' => $gameId
     ]);
 
+    // Check if player is active and not banned
     if (!$gamePlayer->is_active || $gamePlayer->is_banned) {
         return response()->json([
             'error' => 'You are not allowed to play this game'
         ], 403);
     }
 
-    $user->point = $user->point - $betAmount;
+    // Deduct bet points
+    $user->point -= $betAmount;
     $user->save();
 
-    $rewards = DB::table('rewards')
-        ->where('is_active', true)
-        ->get()
-        ->values();
+    // Load active rewards
+    $rewards = DB::table('rewards')->where('is_active', true)->get()->values();
 
-    if ($rewards->count() == 0) {
+    if ($rewards->isEmpty()) {
         return response()->json([
             'error' => 'No rewards configured'
         ], 500);
     }
 
+    // Select reward
     if (!$gamePlayer->is_allowed) {
+        // Player not allowed to win → force lose
         $selectedReward = $rewards->firstWhere('type', 'lose');
     } else {
-
+        // Weighted probability selection
         $totalProbability = $rewards->sum('probability');
         $rand = rand(1, $totalProbability);
-
         $current = 0;
 
         foreach ($rewards as $reward) {
-
             $current += $reward->probability;
-
             if ($rand <= $current) {
                 $selectedReward = $reward;
                 break;
@@ -93,30 +95,31 @@ public function spin(Request $request)
         }
     }
 
-    $rewardIndex = $rewards->search(function ($item) use ($selectedReward) {
-        return $item->id === $selectedReward->id;
-    });
+    // Find segment index for frontend wheel animation
+    $rewardIndex = $rewards->search(fn($item) => $item->id === $selectedReward->id);
 
+    // Determine win state
     $isWinner = $selectedReward->type !== 'lose';
-
     $winAmount = 0;
 
-    if ($selectedReward->type == 'point') {
-
-        $winAmount = $selectedReward->value;
-        $user->point = $user->point + $winAmount;
-        $user->save();
-
-    } elseif ($selectedReward->type == 'money') {
-
-        $winAmount = $betAmount * $selectedReward->value;
-        $user->point = $user->point + $winAmount;
-        $user->save();
-
+    // Apply reward
+    if ($isWinner) {
+        if ($selectedReward->type == 'point') {
+            $winAmount = $selectedReward->value;
+            $user->point += $winAmount;
+            $user->save();
+        } elseif ($selectedReward->type == 'money') {
+            $winAmount = $selectedReward->value;
+            $wallet = Wallet::firstOrCreate(['user_id' => $user->id]);
+            $wallet->balance += $winAmount;
+            $wallet->save();
+        }
     }
 
+    // Update player statistics
     $gamePlayer->updateAfterSpin($isWinner, $betAmount, $winAmount);
 
+    // Return response
     return response()->json([
         'segment_index' => $rewardIndex,
         'reward_id' => $selectedReward->id,
