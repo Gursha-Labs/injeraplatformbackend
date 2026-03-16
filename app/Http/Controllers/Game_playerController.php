@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Game_player;
 use App\Models\Variables;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -36,7 +37,7 @@ class Game_playerController extends Controller
 // In your SpinWheel or SlotMachine controller
 public function spin(Request $request)
 {
-    $user = auth()->user();
+    $user = Auth::user();
     $gameId = $request->game_id;
 
     $betAmount = Variables::where('type', 'bet_point')->first()->value;
@@ -98,13 +99,20 @@ public function spin(Request $request)
 
     $isWinner = $selectedReward->type !== 'lose';
 
-    $winAmount = $isWinner
-        ? $betAmount * $selectedReward->value
-        : 0;
+    $winAmount = 0;
 
-    if ($isWinner) {
+    if ($selectedReward->type == 'point') {
+
+        $winAmount = $selectedReward->value;
         $user->point = $user->point + $winAmount;
         $user->save();
+
+    } elseif ($selectedReward->type == 'money') {
+
+        $winAmount = $betAmount * $selectedReward->value;
+        $user->point = $user->point + $winAmount;
+        $user->save();
+
     }
 
     $gamePlayer->updateAfterSpin($isWinner, $betAmount, $winAmount);
