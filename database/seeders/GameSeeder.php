@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Game;
+use Illuminate\Support\Str;
 
 class GameSeeder extends Seeder
 {
@@ -11,6 +12,7 @@ class GameSeeder extends Seeder
     {
         // Spin Wheel Game
         Game::create([
+            'id' => Str::uuid(),
             'name' => 'Lucky Spin Wheel',
             'type' => 'spin_wheel',
             'wheel_labels' => ['$30', '$10', '$250', '$20', 'LOSE', '$5', '$500', '$80'],
@@ -24,6 +26,7 @@ class GameSeeder extends Seeder
 
         // Slot Machine Game
         Game::create([
+            'id' => Str::uuid(),
             'name' => 'Classic Slot Machine',
             'type' => 'slot_machine',
             'slot_symbols' => ['🍒', '🍋', '7️⃣', '💎', '⭐', '🔔'],
