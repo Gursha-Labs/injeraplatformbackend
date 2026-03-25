@@ -44,7 +44,7 @@ public function spin(Request $request)
     $betAmount = Variables::where('type', 'bet_point')->first()->value;
 
     // Check if user has enough points
-    if ($betAmount > $user->point) {
+    if ($betAmount > $user->points) {
         return response()->json([
             'error' => 'Insufficient points to place the bet'
         ], 400);
@@ -64,7 +64,7 @@ public function spin(Request $request)
     }
 
     // Deduct bet points
-    $user->point -= $betAmount;
+    $user->points -= $betAmount;
     $user->save();
 
     // Load active rewards
