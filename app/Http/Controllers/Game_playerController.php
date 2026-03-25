@@ -70,12 +70,12 @@ public function spin(Request $request)
     // Load active rewards
     $rewards = DB::table('rewards')->where('is_active', true)->get()->values();
 
-    if ($rewards->isEmpty()) {
+  /*   if ($rewards->isEmpty()) {
         return response()->json([
             'error' => 'No rewards configured'
         ], 500);
     }
-
+ */
     // Select reward
     if (!$gamePlayer->is_allowed) {
         // Player not allowed to win → force lose
