@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
@@ -9,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 class Game_Player extends Model
 {
     use HasFactory;
-
+    use HasUuid;
     protected $table = 'game_players';
 
     protected $fillable = [
@@ -78,7 +79,7 @@ class Game_Player extends Model
                 Log::info("Player {$this->user_id} is banned until {$this->banned_until}");
                 return false;
             }
-            
+
             // If ban period is over, unban the player
             if ($this->banned_until && now()->gte($this->banned_until)) {
                 $this->update(['is_banned' => false, 'banned_until' => null]);
@@ -98,21 +99,21 @@ class Game_Player extends Model
         // Use win_frequency for probability (1 in X chance)
         // Default 1000 means 1 in 1000 chance (0.1%)
         $frequency = $this->win_frequency ?? 1000;
-        
+
         // Generate random number between 1 and frequency
         $randomNumber = random_int(1, $frequency);
-        
+
         // Win if random number equals 1 (1 in frequency chance)
         $isWinner = ($randomNumber === 1);
-        
+
         // You can add additional logic here to make wins even scarcer
         // For example, require multiple conditions:
         // $isWinner = ($randomNumber === 1) && ($this->consecutive_losses > 10);
-        
-        Log::info("Win determination for player {$this->user_id}: " . 
-                 "Random number: {$randomNumber}/{$frequency}, " . 
-                 "Result: " . ($isWinner ? 'WIN' : 'LOSE'));
-        
+
+        Log::info("Win determination for player {$this->user_id}: " .
+            "Random number: {$randomNumber}/{$frequency}, " .
+            "Result: " . ($isWinner ? 'WIN' : 'LOSE'));
+
         return $isWinner;
     }
 
@@ -158,7 +159,7 @@ class Game_Player extends Model
 
     protected function getMultiplierForRarity(string $rarity): int
     {
-        return match($rarity) {
+        return match ($rarity) {
             'common' => 2,
             'rare' => 5,
             'epic' => 20,
@@ -223,6 +224,6 @@ class Game_Player extends Model
     public function scopeAllowedToWin($query)
     {
         return $query->where('is_allowed', true)
-                     ->where('is_banned', false);
+            ->where('is_banned', false);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Game_player;
 use App\Models\Variables;
+use App\Models\Wallet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -70,12 +71,12 @@ public function spin(Request $request)
     // Load active rewards
     $rewards = DB::table('rewards')->where('is_active', true)->get()->values();
 
-  /*   if ($rewards->isEmpty()) {
+    if ($rewards->isEmpty()) {
         return response()->json([
             'error' => 'No rewards configured'
         ], 500);
     }
- */
+
     // Select reward
     if (!$gamePlayer->is_allowed) {
         // Player not allowed to win → force lose
@@ -106,7 +107,7 @@ public function spin(Request $request)
     if ($isWinner) {
         if ($selectedReward->type == 'point') {
             $winAmount = $selectedReward->value;
-            $user->point += $winAmount;
+            $user->points += $winAmount;
             $user->save();
         } elseif ($selectedReward->type == 'money') {
             $winAmount = $selectedReward->value;
