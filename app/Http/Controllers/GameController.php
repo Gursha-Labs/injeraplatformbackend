@@ -15,14 +15,7 @@ class GameController extends Controller
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-
-
-    /**
-     * Display the specified resource.
-     */
+   
     public function show()
     {
         $games = Game::all();
