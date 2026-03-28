@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Game_playerController;
+use App\Http\Controllers\GameController;
 use App\Http\Controllers\RecentSearchController;
 use App\Http\Controllers\RewardsController;
 use App\Http\Controllers\VariablesController;
@@ -86,6 +87,8 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/variables', [VariablesController::class, 'show']);
     Route::get('/variables/{id}', [VariablesController::class, 'showOne']);
     Route::put('/variables/{id}', [VariablesController::class, 'update']);
+    Route::get('/all-games', [GameController::class, 'show']);
+    Route::get('/games/{id}', [GameController::class, 'get_by_id']);
 });
 
 
