@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\DepositeController;
 use App\Http\Controllers\Game_playerController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\RecentSearchController;
@@ -27,7 +28,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
 Route::group(['prefix' => 'public'], function () {});
-
 // Protected Routes
 Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     // Auth
@@ -89,6 +89,11 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::put('/variables/{id}', [VariablesController::class, 'update']);
     Route::get('/all-games', [GameController::class, 'show']);
     Route::get('/games/{id}', [GameController::class, 'get_by_id']);
+
+
+    //chapa integration
+    Route::post('/payment', [DepositeController::class, 'store']);
+    Route::post("/chapa/webhook", [DepositeController::class, "webhook"]);
 });
 
 
