@@ -92,8 +92,12 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
 
 
     //chapa integration
-    Route::post('/payment', [DepositeController::class, 'store']);
-    Route::post("/chapa/webhook", [DepositeController::class, "webhook"]);
+    Route::post('/deposit', [DepositeController::class, 'store']);
+    Route::post('/chapa/webhook', [DepositeController::class, 'webhook']);
+    Route::get('/check-payment-status', [DepositeController::class, 'checkPaymentStatus']);
+    Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
+    Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
+    Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);
 });
 
 
