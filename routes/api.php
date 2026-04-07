@@ -18,6 +18,7 @@ use App\Http\Controllers\Game_playerController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\RecentSearchController;
 use App\Http\Controllers\RewardsController;
+use App\Http\Controllers\WithdrawalsController;
 use App\Http\Controllers\VariablesController;
 
 // Authentication Routes
@@ -98,6 +99,16 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
     Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
     Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);
+
+    // withdrawals
+    Route::get('/withdrawals', [WithdrawalsController::class, 'index'])->middleware('permission:view_withdrawals');
+    Route::post('/withdrawals', [WithdrawalsController::class, 'store'])->middleware('permission:create_withdrawals');
+    Route::get('/withdrawals/{withdrawal}', [WithdrawalsController::class, 'show'])->middleware('permission:view_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/review', [WithdrawalsController::class, 'update'])->middleware('permission:review_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/process', [WithdrawalsController::class, 'process'])->middleware('permission:process_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/complete', [WithdrawalsController::class, 'complete'])->middleware('permission:process_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/fail', [WithdrawalsController::class, 'fail'])->middleware('permission:process_withdrawals');
+    Route::delete('/withdrawals/{withdrawal}', [WithdrawalsController::class, 'destroy'])->middleware('permission:create_withdrawals');
 });
 
 
