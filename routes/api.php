@@ -29,6 +29,9 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
 Route::group(['prefix' => 'public'], function () {});
+Route::post('/chapa/webhook', [DepositeController::class, 'webhook']);
+Route::get('/check-payment-status', [DepositeController::class, 'checkPaymentStatus']);
+
 // Protected Routes
 Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     // Auth
@@ -54,6 +57,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
     Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
     Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
+    Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
     Route::prefix('spin-wheel')->group(function () {
         // Spin the wheel
         Route::post('spin', [Game_playerController::class, 'spin']);
@@ -92,10 +96,11 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/games/{id}', [GameController::class, 'get_by_id']);
 
 
+    //assign role to user
+    Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
+
     //chapa integration
     Route::post('/deposit', [DepositeController::class, 'store']);
-    Route::post('/chapa/webhook', [DepositeController::class, 'webhook']);
-    Route::get('/check-payment-status', [DepositeController::class, 'checkPaymentStatus']);
     Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
     Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
     Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);

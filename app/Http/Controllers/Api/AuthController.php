@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\UserProfile;
 use App\Models\AdvertiserProfile;
@@ -155,6 +156,13 @@ class AuthController extends Controller
                     ]
                 );
             }
+
+            // Ensure the role exists and keep user role in sync with account type.
+            Role::firstOrCreate([
+                'name' => $user->type,
+                'guard_name' => 'web',
+            ]);
+            $user->syncRoles([$user->type]);
 
             $otp = random_int(100000, 999999);
             $expiresAt = now()->addMinutes($this->otpTtlMinutes);

@@ -6,15 +6,19 @@ use App\Models\Wallet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-class WalletController extends Controller
+class WalletController extends BaseController
 {
     public function balance()
     {
         $wallet = Wallet::where('user_id', Auth::id())->first();
 
-        return response()->json([
-            'balance' => $wallet->balance ?? 0
-        ]);
+       return $this->sendResponse(
+            [
+                'balance' => $wallet->balance
+            ],
+            'Deposit successful',
+
+        );
     }
 
     public function deposit(Request $request)
@@ -26,10 +30,13 @@ class WalletController extends Controller
         $wallet->balance = $wallet->balance + $request->amount;
         $wallet->save();
 
-        return response()->json([
-            'message' => 'Deposit successful',
-            'balance' => $wallet->balance
-        ]);
+        return $this->sendResponse(
+            [
+                'balance' => $wallet->balance
+            ],
+            'Deposit successful',
+
+        );
     }
 
     public function withdraw(Request $request)

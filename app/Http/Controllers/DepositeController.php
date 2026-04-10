@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class DepositeController extends Controller
+class DepositeController extends BaseController
 {
     /**
      * Display a listing of the resource.
@@ -76,71 +76,71 @@ class DepositeController extends Controller
             'tx_ref' => $request->tx_ref,
             'content' => $request->getContent()
         ]);
-        
+
         $tx_ref = $request->tx_ref;
-        
+
         if (!$tx_ref) {
             Log::error('No tx_ref in webhook request');
             return response()->json(['error' => 'No tx_ref'], 400);
         }
-        
+
         // Retry verification up to 3 times
         $maxRetries = 3;
         $attempt = 0;
         $verified = false;
         $data = null;
-        
+
         while ($attempt < $maxRetries && !$verified) {
             $attempt++;
-            
+
             $verify = Http::withHeaders([
                 "Authorization" => "Bearer " . env("CHAPA_SECRET_KEY")
             ])->get("https://api.chapa.co/v1/transaction/verify/" . $tx_ref);
-            
+
             $data = $verify->json();
-            
+
             if (isset($data["status"]) && $data["status"] == "success") {
                 $verified = true;
                 break;
             }
-            
+
             if ($attempt < $maxRetries) {
                 sleep(2); // Wait 2 seconds before retry
             }
         }
-        
+
         Log::info('Chapa verification response', ['data' => $data, 'verified' => $verified]);
-        
+
         if ($verified) {
             $transaction = Transaction::where("tx_ref", $tx_ref)->first();
-            
+
             if (!$transaction) {
                 Log::error('Transaction not found for tx_ref: ' . $tx_ref);
                 return response()->json(['error' => 'Transaction not found'], 404);
             }
-            
+
             if ($transaction->status != "success") {
                 // Use database transaction to ensure consistency
                 DB::beginTransaction();
-                
+
                 try {
                     $transaction->update(["status" => "success"]);
-                    
+
                     $wallet = Wallet::firstOrCreate(
                         ["user_id" => $transaction->user_id],
                         ["balance" => 0]
                     );
-                    
+
                     $oldBalance = $wallet->balance;
                     $wallet->increment("balance", $transaction->amount);
-                    
+
                     Log::info('Wallet updated', [
                         'user_id' => $transaction->user_id,
                         'old_balance' => $oldBalance,
                         'amount' => $transaction->amount,
                         'new_balance' => $wallet->balance
                     ]);
-                    
+
                     DB::commit();
                 } catch (\Exception $e) {
                     DB::rollback();
@@ -154,7 +154,7 @@ class DepositeController extends Controller
                 'response' => $data
             ]);
         }
-        
+
         return response()->json(["message" => "ok"]);
     }
 
@@ -164,18 +164,22 @@ class DepositeController extends Controller
     public function checkPaymentStatus(Request $request)
     {
         $tx_ref = $request->query('tx_ref');
-        
+
         if (!$tx_ref) {
             return response()->json(['error' => 'No tx_ref'], 400);
         }
-        
+
         // Check if transaction is already processed
         $transaction = Transaction::where('tx_ref', $tx_ref)->first();
-        
+
         if (!$transaction) {
-            return response()->json(['error' => 'Transaction not found'], 404);
+            // Keep polling from the success page instead of hard-failing with 404.
+            return response()->json([
+                'status' => 'pending',
+                'message' => 'Transaction not found yet'
+            ]);
         }
-        
+
         if ($transaction && $transaction->status == 'success') {
             $wallet = Wallet::where('user_id', $transaction->user_id)->first();
             return response()->json([
@@ -184,14 +188,14 @@ class DepositeController extends Controller
                 'amount' => $transaction->amount
             ]);
         }
-        
+
         // If not processed, try to verify with Chapa now
         $verify = Http::withHeaders([
             "Authorization" => "Bearer " . env("CHAPA_SECRET_KEY")
         ])->get("https://api.chapa.co/v1/transaction/verify/" . $tx_ref);
-        
+
         $data = $verify->json();
-        
+
         if (isset($data["status"]) && $data["status"] == "success") {
             // Process the payment immediately
             if ($transaction && $transaction->status != "success") {
@@ -204,7 +208,7 @@ class DepositeController extends Controller
                     );
                     $wallet->increment("balance", $transaction->amount);
                     DB::commit();
-                    
+
                     return response()->json([
                         'status' => 'success',
                         'balance' => $wallet->fresh()->balance,
@@ -217,7 +221,7 @@ class DepositeController extends Controller
                 }
             }
         }
-        
+
         return response()->json(['status' => 'pending']);
     }
 
@@ -227,20 +231,20 @@ class DepositeController extends Controller
     public function processPaymentManually(Request $request)
     {
         $tx_ref = $request->input('tx_ref');
-        
+
         if (!$tx_ref) {
             return response()->json(['success' => false, 'error' => 'No tx_ref'], 400);
         }
-        
+
         $verify = Http::withHeaders([
             "Authorization" => "Bearer " . env("CHAPA_SECRET_KEY")
         ])->get("https://api.chapa.co/v1/transaction/verify/" . $tx_ref);
-        
+
         $data = $verify->json();
-        
+
         if (isset($data["status"]) && $data["status"] == "success") {
             $transaction = Transaction::where("tx_ref", $tx_ref)->first();
-            
+
             if ($transaction && $transaction->status != "success") {
                 DB::beginTransaction();
                 try {
@@ -251,7 +255,7 @@ class DepositeController extends Controller
                     );
                     $wallet->increment("balance", $transaction->amount);
                     DB::commit();
-                    
+
                     return response()->json([
                         'success' => true,
                         'balance' => $wallet->fresh()->balance,
@@ -264,7 +268,7 @@ class DepositeController extends Controller
                 }
             }
         }
-        
+
         return response()->json(['success' => false, 'error' => 'Verification failed']);
     }
 
@@ -274,18 +278,18 @@ class DepositeController extends Controller
     public function debugTransaction($tx_ref)
     {
         $transaction = Transaction::where('tx_ref', $tx_ref)->first();
-        
+
         if (!$transaction) {
             return response()->json(['error' => 'Transaction not found'], 404);
         }
-        
+
         $wallet = Wallet::where('user_id', $transaction->user_id)->first();
-        
+
         // Verify with Chapa
         $chapaVerification = Http::withHeaders([
             "Authorization" => "Bearer " . env("CHAPA_SECRET_KEY")
         ])->get("https://api.chapa.co/v1/transaction/verify/" . $tx_ref);
-        
+
         return response()->json([
             'transaction' => [
                 'id' => $transaction->id,
@@ -312,9 +316,15 @@ class DepositeController extends Controller
         if (!$user) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
-        
+
         $wallet = Wallet::where('user_id', $user->id)->first();
-        return response()->json(['balance' => $wallet ? $wallet->balance : 0]);
+        return $this->sendResponse(
+            [
+                'balance' => $wallet->balance
+            ],
+            'Deposit successful',
+
+        );
     }
 
     /**

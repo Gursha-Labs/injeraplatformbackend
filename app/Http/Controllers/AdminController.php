@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\AdVideo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
@@ -84,13 +85,13 @@ class AdminController extends Controller
         }
 
         $user = User::findOrFail($userId);
-        if($user->type =="admin"){
-            return response()->json(['error'=>"Admin can't be blocked"]);
-        } else{
-        $user->is_blocking = true;
-        $user->save();
+        if ($user->type == "admin") {
+            return response()->json(['error' => "Admin can't be blocked"]);
+        } else {
+            $user->is_blocking = true;
+            $user->save();
         }
-    
+
 
         return response()->json(['success' => true, 'message' => 'User has been blocked.']);
     }
@@ -108,5 +109,25 @@ class AdminController extends Controller
         $user->save();
 
         return response()->json(['success' => true, 'message' => 'User has been unblocked.']);
+    }
+
+    public function assign_role(Request $request, $userId)
+    {
+        $admin = Auth::user();
+
+        if (!$admin || $admin->type !== 'admin') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $validated = $request->validate([
+            'role' => ['required', Rule::in(['admin', 'user', 'advertiser', 'payment_processor'])],
+        ]);
+
+        $user = User::findOrFail($userId);
+
+        $role = $validated['role'];
+        $user->assignRole($role);
+
+        return response()->json(['success' => true, 'message' => "Role '{$role}' has been assigned to user '{$user->username}'."]);
     }
 }
