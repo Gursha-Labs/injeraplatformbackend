@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionSeeder extends Seeder
@@ -27,27 +28,32 @@ class RolePermissionSeeder extends Seeder
 
         foreach ($permissions as $permissionName) {
             Permission::firstOrCreate([
+                'id' => Str::uuid(),
                 'name' => $permissionName,
                 'guard_name' => $guard,
             ]);
         }
 
         $adminRole = Role::firstOrCreate([
+            'id' => Str::uuid(),
             'name' => 'admin',
             'guard_name' => $guard,
         ]);
 
         $userRole = Role::firstOrCreate([
+            'id' => Str::uuid(),
             'name' => 'user',
             'guard_name' => $guard,
         ]);
 
         $advertiserRole = Role::firstOrCreate([
+            'id' => Str::uuid(),
             'name' => 'advertiser',
             'guard_name' => $guard,
         ]);
 
         $paymentProcessorRole = Role::firstOrCreate([
+            'id' => Str::uuid(),
             'name' => 'payment_processor',
             'guard_name' => $guard,
         ]);
