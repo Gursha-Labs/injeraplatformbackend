@@ -58,8 +58,8 @@ class DepositeController extends BaseController
             "last_name" => $request->last_name,
             "phone" => $request->phone,
             "tx_ref" => $tx_ref,
-            "callback_url" => "https://hypergolic-erma-violably.ngrok-free.dev/api/chapa/webhook",
-            "return_url" => "https://hypergolic-erma-violably.ngrok-free.dev/payment-success?tx_ref=" . $tx_ref
+            "callback_url" => env("CALLBACK_URL"),
+            "return_url" => env("RETURN_URL") . "?tx_ref=" . $tx_ref
         ]);
 
         return response()->json($response->json());
