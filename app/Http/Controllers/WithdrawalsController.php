@@ -108,30 +108,34 @@ class WithdrawalsController extends BaseController
     public function update(Request $request, Withdrawals $withdrawal)
     {
         $validated = $request->validate([
-            'decision' => 'required|string|in:' . implode(',', self::REVIEW_DECISIONS),
+            'status' => 'required|string|in:pending,under_review,processing,paid,failed,cancelled,approved,rejected',
             'review_notes' => 'nullable|string|max:2000',
         ]);
 
         if (!in_array($withdrawal->status, ['pending', 'under_review'], true)) {
-            return $this->sendError('Only pending or under_review withdrawal can be reviewed', [], 422);
+            return $this->sendError('Only pending or under_review withdrawal can be updated', [], 422);
         }
 
-        $withdrawal->status = $validated['decision'];
+        $withdrawal->status = $validated['status'];
         $withdrawal->reviewed_by = Auth::id();
         $withdrawal->reviewed_at = now();
         $withdrawal->review_notes = $validated['review_notes'] ?? null;
         $withdrawal->save();
 
-        if ($validated['decision'] === 'rejected') {
+        if ($validated['status'] === 'rejected') {
             DB::transaction(function () use ($withdrawal) {
-                $wallet = Wallet::where('id', $withdrawal->wallet_id)->lockForUpdate()->first();
+
+                $wallet = Wallet::where('id', $withdrawal->wallet_id)
+                    ->lockForUpdate()
+                    ->first();
+
                 if ($wallet) {
                     $wallet->increment('balance', (float) $withdrawal->amount);
                 }
             });
         }
 
-        return $this->sendResponse($withdrawal, 'Withdrawal reviewed');
+        return $this->sendResponse($withdrawal, 'Withdrawal status updated');
     }
 
     /**
