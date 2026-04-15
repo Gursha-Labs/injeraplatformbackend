@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\UserActivity;
 use App\Models\User;
 use App\Models\AdVideo;
 use Illuminate\Http\Request;
@@ -80,7 +81,7 @@ class AdminController extends Controller
         $admin = Auth::user();
 
         // Only admin can block users
-        if ($admin->type !== 'admin') {
+        if (!$admin || $admin->type !== 'admin') {
             return response()->json(['error' => 'Access denied'], 403);
         }
 
@@ -90,6 +91,14 @@ class AdminController extends Controller
         } else {
             $user->is_blocking = true;
             $user->save();
+            UserActivity::record(
+                $user,
+                'account_blocked',
+                'Account blocked by admin.',
+                ['blocked' => true],
+                $admin,
+                request()
+            );
         }
 
 
@@ -100,13 +109,21 @@ class AdminController extends Controller
         $admin = Auth::user();
 
         // Only admin can unblock users
-        if ($admin->type !== 'admin') {
+        if (!$admin || $admin->type !== 'admin') {
             return response()->json(['error' => 'Access denied'], 403);
         }
 
         $user = User::findOrFail($userId);
         $user->is_blocking = false;
         $user->save();
+        UserActivity::record(
+            $user,
+            'account_unblocked',
+            'Account unblocked by admin.',
+            ['blocked' => false],
+            $admin,
+            request()
+        );
 
         return response()->json(['success' => true, 'message' => 'User has been unblocked.']);
     }
@@ -127,7 +144,44 @@ class AdminController extends Controller
 
         $role = $validated['role'];
         $user->assignRole($role);
+        UserActivity::record(
+            $user,
+            'role_assigned',
+            "Role '{$role}' was assigned by admin.",
+            ['role' => $role],
+            $admin,
+            $request
+        );
 
         return response()->json(['success' => true, 'message' => "Role '{$role}' has been assigned to user '{$user->username}'."]);
+    }
+
+
+
+    public function user_activity_log(Request $request, $userId)
+    {
+        $admin = Auth::user();
+
+        if (!$admin || $admin->type !== 'admin') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $user = User::findOrFail($userId);
+
+        $activities = UserActivity::with('actor:id,username,email')
+            ->where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'last_active_at' => $user->last_active_at,
+            ],
+            'activities' => $activities
+        ]);
     }
 }

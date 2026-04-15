@@ -22,6 +22,7 @@ class User extends Authenticatable
         'password',
         'type',
         'email_verified_at',
+        'last_active_at',
     ];
 
     protected $hidden = [
@@ -32,6 +33,7 @@ class User extends Authenticatable
     protected $casts = [
         'is_blocking' => 'boolean',
         'email_verified_at' => 'datetime',
+        'last_active_at' => 'datetime',
     ];
 
     /**
@@ -61,6 +63,11 @@ class User extends Authenticatable
     public function advertiserProfile()
     {
         return $this->hasOne(AdvertiserProfile::class);
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(UserActivity::class, 'user_id');
     }
 
     // Role helpers

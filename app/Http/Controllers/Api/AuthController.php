@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\UserActivity;
 use App\Models\UserProfile;
 use App\Models\AdvertiserProfile;
 use Exception;
@@ -429,6 +430,15 @@ class AuthController extends Controller
 
             if (!$user->is_blocking) {
                 $token = $user->createToken('auth_token')->plainTextToken;
+                $user->forceFill(['last_active_at' => Carbon::now()])->save();
+                UserActivity::record(
+                    $user,
+                    'login',
+                    'User logged in successfully.',
+                    ['login' => $identifier],
+                    null,
+                    $request
+                );
             } else {
                 return response()->json([
                     'message' => 'Account blocked',
@@ -483,7 +493,20 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         try {
-            $request->user()->currentAccessToken()->delete();
+            $user = $request->user();
+
+            if ($user) {
+                UserActivity::record(
+                    $user,
+                    'logout',
+                    'User logged out successfully.',
+                    [],
+                    null,
+                    $request
+                );
+                $user->forceFill(['last_active_at' => Carbon::now()])->save();
+                $user->currentAccessToken()?->delete();
+            }
 
             return response()->json([
                 'message' => 'Logged out successfully'

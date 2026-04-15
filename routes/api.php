@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ApiAnalyticsController;
 use App\Http\Controllers\DepositeController;
 use App\Http\Controllers\Game_playerController;
 use App\Http\Controllers\GameController;
@@ -58,6 +59,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
     Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
     Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
+    Route::get('/user-activity/{userId}', [AdminController::class, 'user_activity_log']);
     Route::prefix('spin-wheel')->group(function () {
         // Spin the wheel
         Route::post('spin', [Game_playerController::class, 'spin']);
@@ -115,7 +117,16 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::post('/withdrawals/{withdrawal}/fail', [WithdrawalsController::class, 'fail'])->middleware('permission:process_withdrawals');
     Route::delete('/withdrawals/{withdrawal}', [WithdrawalsController::class, 'destroy'])->middleware('permission:create_withdrawals');
 });
-
+//analytic routes
+Route::prefix('analytics')->group(function () {
+    Route::get('/overview', [ApiAnalyticsController::class, 'overview']);
+    Route::get('/top-endpoints', [ApiAnalyticsController::class, 'topEndpoints']);
+    Route::get('/top-endpoints-method', [ApiAnalyticsController::class, 'topEndpointsWithMethod']);
+    Route::get('/traffic', [ApiAnalyticsController::class, 'trafficPerDay']);
+    Route::get('/avg-response', [ApiAnalyticsController::class, 'avgResponseTimePerEndpoint']);
+    Route::get('/errors', [ApiAnalyticsController::class, 'errorRate']);
+    Route::get('/slow-endpoints', [ApiAnalyticsController::class, 'slowEndpoints']);
+});
 
 Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
 // Public Routes

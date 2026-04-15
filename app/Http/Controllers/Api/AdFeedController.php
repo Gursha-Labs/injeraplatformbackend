@@ -12,40 +12,60 @@ class AdFeedController extends Controller
     {
         $perPage = 5;
         $cursor = $request->query('cursor');
-    
-        $query = AdVideo::with([    
-                'advertiser:id,username,profile_picture',
-                'category:id,name',
-                'tags:id,name'
-            ])
+
+        $query = AdVideo::with([
+            'advertiser:id,username,profile_picture',
+            'category:id,name',
+            'tags:id,name',
+            'comments' => function ($q) {
+                $q->with([
+                    'user:id,username,profile_picture',
+                    'replies.user:id,username,profile_picture'
+                ])
+                    ->orderBy('created_at', 'desc');
+            },
+            'views:id,ad_id,user_id,created_at',
+            'productVariant:id,video_id,image,price,location'
+
+
+        ])
             ->select([
-                'id', 'title', 'video_url', 'advertiser_id', 'category_id',
-                'view_count', 'comment_count', 'duration', 'created_at'
+                'id',
+                'title',
+                'video_url',
+                'advertiser_id',
+                'category_id',
+                'view_count',
+                'comment_count',
+
+                'duration',
+
+                'created_at'
             ])
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc');
-    
+
         if ($cursor) {
             [$cursorDate, $cursorId] = explode('|', $cursor);
-    
+
             $query->where(function ($q) use ($cursorDate, $cursorId) {
                 $q->where('created_at', '<', $cursorDate)
-                  ->orWhere(function ($q2) use ($cursorDate, $cursorId) {
-                      $q2->where('created_at', '=', $cursorDate)
-                         ->where('id', '<', $cursorId);
-                  });
+                    ->orWhere(function ($q2) use ($cursorDate, $cursorId) {
+                        $q2->where('created_at', '=', $cursorDate)
+                            ->where('id', '<', $cursorId);
+                    });
             });
         }
-    
+
         $ads = $query->limit($perPage + 1)->get();
-    
+
         $hasMore = $ads->count() > $perPage;
         $ads = $ads->take($perPage);
-    
+
         $nextCursor = $hasMore
             ? $ads->last()->created_at->format('Y-m-d H:i:s') . '|' . $ads->last()->id
             : null;
-    
+
         return response()->json([
             'data' => $ads,
             'next_cursor' => $nextCursor,
@@ -58,9 +78,19 @@ class AdFeedController extends Controller
         $ad->load([
             'advertiser:id,username,profile_picture',
             'category:id,name',
-            'tags:id,name'
+            'tags:id,name',
+            'comments' => function ($q) {
+                $q->with([
+                    'user:id,username,profile_picture',
+                    'replies.user:id,username,profile_picture'
+                ])
+                    ->orderBy('created_at', 'desc');
+            },
+            'views:id,ad_id,user_id,created_at',
+            'productVariant:id,video_id,image,price,location'
+
         ]);
-    
+
         return response()->json([
             'ad' => $ad
         ]);
