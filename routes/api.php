@@ -13,7 +13,14 @@ use App\Http\Controllers\Api\DashboardController;
 
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ApiAnalyticsController;
+use App\Http\Controllers\DepositeController;
+use App\Http\Controllers\Game_playerController;
+use App\Http\Controllers\GameController;
 use App\Http\Controllers\RecentSearchController;
+use App\Http\Controllers\RewardsController;
+use App\Http\Controllers\WithdrawalsController;
+use App\Http\Controllers\VariablesController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -22,15 +29,17 @@ Route::post('/resend-verification', [AuthController::class, 'resendVerification'
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forget'])->middleware('throttle:5,1');
 Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:10,1');
-
+Route::group(['prefix' => 'public'], function () {});
+Route::post('/chapa/webhook', [DepositeController::class, 'webhook']);
+Route::get('/check-payment-status', [DepositeController::class, 'checkPaymentStatus']);
 
 // Protected Routes
-Route::middleware(['auth:sanctum','blocked'])->group(function () {
+Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
-    
+
     // User Profile
     Route::get('/profile/user', [UserProfileController::class, 'show']);
     Route::post('/profile/user', [UserProfileController::class, 'update']);
@@ -46,43 +55,80 @@ Route::middleware(['auth:sanctum','blocked'])->group(function () {
 
     // Unified Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
-
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
     Route::get('/block-user/{userId}', [AdminController::class, 'block_user']);
     Route::get('/unblock-user/{userId}', [AdminController::class, 'unblock_user']);
-
+    Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
+    Route::get('/user-activity/{userId}', [AdminController::class, 'user_activity_log']);
+    Route::prefix('spin-wheel')->group(function () {
+        // Spin the wheel
+        Route::post('spin', [Game_playerController::class, 'spin']);
+    });
     // Ad uploads
     Route::post('/ads/upload', [AdController::class, 'upload']);
-
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
-
     // Advertiser replies
     Route::post('/ads/{ad}/comments/{comment}/reply', [CommentController::class, 'reply']);
     // Search videos
-    Route::get("/seach-video/{search_term}",[AdController::class,"search_ads"]);
+    Route::get("/seach-video/{search_term}", [AdController::class, "search_ads"]);
     Route::get('/recent-searches', [RecentSearchController::class, 'recent_searches']);
     // Ad views
     Route::post('/ads/{ad}/view', [AdViewController::class, 'track']);
     Route::get('/user/points', [AdViewController::class, 'points']);
-
     // Orders
     Route::prefix('orders')->group(function () {
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::post('/orders', [OrderController::class, 'store']);
-    Route::get('/orders/{order}', [OrderController::class, 'show']);
-    Route::put('/orders/{order}', [OrderController::class, 'update']);
-    Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
-    Route::get('/my-orders', [OrderController::class, 'my_orders']);
-    Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
-    Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::post('/orders', [OrderController::class, 'store']);
+        Route::get('/orders/{order}', [OrderController::class, 'show']);
+        Route::put('/orders/{order}', [OrderController::class, 'update']);
+        Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
+        Route::get('/my-orders', [OrderController::class, 'my_orders']);
+        Route::delete('/delete-all-orders', [OrderController::class, 'deleteAllOrdersForUser']);
+        Route::delete('/orders/delete/{orderId}', [OrderController::class, 'delete_order_by_id']);
     });
+    //Rewards
+    Route::get('/reward', [RewardsController::class, 'show']);
+    Route::get('/reward/{id}', [RewardsController::class, 'showOne']);
+    Route::put('/reward/{id}', [RewardsController::class, 'update']);
+    Route::get('/variables', [VariablesController::class, 'show']);
+    Route::get('/variables/{id}', [VariablesController::class, 'showOne']);
+    Route::put('/variables/{id}', [VariablesController::class, 'update']);
+    Route::get('/all-games', [GameController::class, 'show']);
+    Route::get('/games/{id}', [GameController::class, 'get_by_id']);
+
+
+    //assign role to user
+    Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
+
+    //chapa integration
+    Route::post('/deposit', [DepositeController::class, 'store']);
+    Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
+    Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
+    Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);
+
+    // withdrawals
+    Route::get('/withdrawals', [WithdrawalsController::class, 'index'])->middleware('permission:view_withdrawals');
+    Route::post('/withdrawals', [WithdrawalsController::class, 'store'])->middleware('permission:create_withdrawals');
+    Route::get('/withdrawals/{withdrawal}', [WithdrawalsController::class, 'show'])->middleware('permission:view_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/review', [WithdrawalsController::class, 'update'])->middleware('permission:review_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/process', [WithdrawalsController::class, 'process'])->middleware('permission:process_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/complete', [WithdrawalsController::class, 'complete'])->middleware('permission:process_withdrawals');
+    Route::post('/withdrawals/{withdrawal}/fail', [WithdrawalsController::class, 'fail'])->middleware('permission:process_withdrawals');
+    Route::delete('/withdrawals/{withdrawal}', [WithdrawalsController::class, 'destroy'])->middleware('permission:create_withdrawals');
+});
+//analytic routes
+Route::prefix('analytics')->group(function () {
+    Route::get('/overview', [ApiAnalyticsController::class, 'overview']);
+    Route::get('/top-endpoints', [ApiAnalyticsController::class, 'topEndpoints']);
+    Route::get('/top-endpoints-method', [ApiAnalyticsController::class, 'topEndpointsWithMethod']);
+    Route::get('/traffic', [ApiAnalyticsController::class, 'trafficPerDay']);
+    Route::get('/avg-response', [ApiAnalyticsController::class, 'avgResponseTimePerEndpoint']);
+    Route::get('/errors', [ApiAnalyticsController::class, 'errorRate']);
+    Route::get('/slow-endpoints', [ApiAnalyticsController::class, 'slowEndpoints']);
 });
 
-
 Route::post('/uploadFile', [App\Http\Controllers\FileUploadController::class, 'uploadFile']);
-
-
 // Public Routes
 Route::get('/categories', [AdController::class, 'getCategories'])->name('api.categories');
 // Public Routes for ads feed

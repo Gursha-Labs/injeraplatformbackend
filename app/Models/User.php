@@ -6,10 +6,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Traits\HasUuid;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable, HasUuid;
+    use HasApiTokens, Notifiable, HasUuid, HasRoles;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -21,6 +22,7 @@ class User extends Authenticatable
         'password',
         'type',
         'email_verified_at',
+        'last_active_at',
     ];
 
     protected $hidden = [
@@ -31,6 +33,7 @@ class User extends Authenticatable
     protected $casts = [
         'is_blocking' => 'boolean',
         'email_verified_at' => 'datetime',
+        'last_active_at' => 'datetime',
     ];
 
     /**
@@ -60,6 +63,11 @@ class User extends Authenticatable
     public function advertiserProfile()
     {
         return $this->hasOne(AdvertiserProfile::class);
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(UserActivity::class, 'user_id');
     }
 
     // Role helpers

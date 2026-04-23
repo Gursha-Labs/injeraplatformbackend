@@ -42,4 +42,8 @@ class AdVideo extends Model
     {
         return $this->hasMany(ProductVariant::class, 'video_id', 'id');
     }
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'video_id', 'id');
+    }
 }
