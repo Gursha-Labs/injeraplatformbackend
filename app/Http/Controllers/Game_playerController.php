@@ -54,7 +54,9 @@ public function spin(Request $request)
     // Get or create game player
     $gamePlayer = Game_Player::firstOrCreate([
         'user_id' => $user->id,
-        'game_id' => $gameId
+        'game_id' => $gameId,
+        "is_active" => true,
+        "is_banned" => false,
     ]);
 
     // Check if player is active and not banned

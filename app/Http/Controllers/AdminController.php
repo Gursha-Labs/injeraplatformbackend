@@ -9,6 +9,9 @@ use App\Models\AdVideo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AdminController extends Controller
 {
@@ -128,22 +131,54 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'User has been unblocked.']);
     }
 
-    public function assign_role(Request $request, $userId)
-    {
+public function assign_role(Request $request, $userId)
+{
+    try {
         $admin = Auth::user();
 
+        // ✅ Auth check
         if (!$admin || $admin->type !== 'admin') {
-            return response()->json(['error' => 'Access denied'], 403);
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
         }
 
+        // ✅ Validation
         $validated = $request->validate([
             'role' => ['required', Rule::in(['admin', 'user', 'advertiser', 'payment_processor'])],
         ]);
 
-        $user = User::findOrFail($userId);
+        $user = User::find($userId);
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
 
         $role = $validated['role'];
-        $user->assignRole($role);
+
+        // ✅ Prevent unnecessary update
+        if ($user->type === $role && $user->hasRole($role)) {
+            return response()->json([
+                'success' => true,
+                'message' => "User already has role '{$role}'",
+                'data' => $user
+            ]);
+        }
+
+        DB::beginTransaction();
+
+        // ✅ Assign role (Spatie)
+        $user->syncRoles([$role]);
+
+        // ✅ Update type (since enum now supports it)
+        $user->type = $role;
+        $user->save();
+
+        // ✅ Activity log
         UserActivity::record(
             $user,
             'role_assigned',
@@ -153,8 +188,39 @@ class AdminController extends Controller
             $request
         );
 
-        return response()->json(['success' => true, 'message' => "Role '{$role}' has been assigned to user '{$user->username}'."]);
+        DB::commit();
+
+        // ✅ Reload fresh user with roles
+        $user->load('roles');
+
+        return response()->json([
+            'success' => true,
+            'message' => "Role '{$role}' has been assigned successfully.",
+            'data' => $user
+        ]);
+
+    } catch (ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        Log::error('Assign Role Error', [
+            'error' => $e->getMessage(),
+            'userId' => $userId
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Something went wrong while assigning role',
+            'error' => app()->environment('local') ? $e->getMessage() : null
+        ], 500);
     }
+}
 
 
 
