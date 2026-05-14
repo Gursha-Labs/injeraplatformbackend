@@ -7,6 +7,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Traits\HasUuid;
 use Spatie\Permission\Traits\HasRoles;
+use App\Models\UserSubscription;
 
 class User extends Authenticatable
 {
@@ -63,6 +64,20 @@ class User extends Authenticatable
     public function advertiserProfile()
     {
         return $this->hasOne(AdvertiserProfile::class);
+    }
+
+    public function subscriptions()
+    {
+        return $this->hasMany(UserSubscription::class);
+    }
+
+    public function activeSubscription()
+    {
+        return $this->hasOne(UserSubscription::class)
+            ->where('status', 'active')
+            ->where('starts_at', '<=', now())
+            ->where('expires_at', '>', now())
+            ->latestOfMany('expires_at');
     }
 
     public function activities()

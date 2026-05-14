@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\RecentSearchController;
 use App\Http\Controllers\RewardsController;
 use App\Http\Controllers\WithdrawalsController;
 use App\Http\Controllers\VariablesController;
+use App\Http\Controllers\UserSubscriptionController;
 
 // Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -65,7 +67,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
         Route::post('spin', [Game_playerController::class, 'spin']);
     });
     // Ad uploads
-    Route::post('/ads/upload', [AdController::class, 'upload']);
+    Route::post('/ads/upload', [AdController::class, 'upload'])->middleware('subscription.active');
     // User comments
     Route::post('/ads/{ad}/comment', [CommentController::class, 'comment']);
     // Advertiser replies
@@ -106,7 +108,18 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
     Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
     Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);
-
+    // user subscription routes
+    Route::get('/user-subscriptions', [UserSubscriptionController::class, 'index']);
+    Route::post('/user-subscriptions', [UserSubscriptionController::class, 'store']);
+    Route::get('/user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'show']);
+    Route::put('/user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'update']);
+    Route::delete('/user-subscriptions/{userSubscription}', [UserSubscriptionController::class, 'destroy']);
+    //subscription routes
+    Route::get('/subscriptions', [SubscriptionController::class, 'index']);
+    Route::post('/subscriptions', [SubscriptionController::class, 'store']);
+    Route::get('/subscriptions/{subscription}', [SubscriptionController::class, 'show']);
+    Route::put('/subscriptions/{subscription}', [SubscriptionController::class, 'update']);
+    Route::delete('/subscriptions/{subscription}', [SubscriptionController::class, 'destroy']);
     // withdrawals
     Route::get('/withdrawals', [WithdrawalsController::class, 'index'])->middleware('permission:view_withdrawals');
     Route::post('/withdrawals', [WithdrawalsController::class, 'store'])->middleware('permission:create_withdrawals');
