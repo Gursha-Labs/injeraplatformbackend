@@ -9,6 +9,7 @@ use App\Models\AdComment;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class ApiAnalyticsController extends Controller
 {
@@ -66,7 +67,7 @@ class ApiAnalyticsController extends Controller
         return response()->json($data);
     }
 
-    public function adertiser_analysis()
+    public function adertiser_analysis(Request $request)
     {
         $user = Auth::user();
 
@@ -98,6 +99,52 @@ class ApiAnalyticsController extends Controller
             $q->where('advertiser_id', $advertiserId);
         })->sum('total_price');
 
+        // 30-day series (configurable via ?days=)
+        $days = (int) $request->query('days', 30);
+        if ($days < 1) $days = 30;
+
+        $start = Carbon::now()->subDays($days - 1)->startOfDay();
+        $end = Carbon::now()->endOfDay();
+
+        $viewsQuery = AdView::whereHas('ad', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->whereBetween('viewed_at', [$start, $end])
+            ->selectRaw("DATE(viewed_at) as day, COUNT(*) as total_views")
+            ->groupBy('day')
+            ->pluck('total_views', 'day')
+            ->toArray();
+
+        $commentsQuery = AdComment::whereHas('adVideo', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->whereBetween('created_at', [$start, $end])
+            ->selectRaw("DATE(created_at) as day, COUNT(*) as total_comments")
+            ->groupBy('day')
+            ->pluck('total_comments', 'day')
+            ->toArray();
+
+        $ordersQuery = Order::whereHas('adVideo', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->whereBetween('created_at', [$start, $end])
+            ->selectRaw("DATE(created_at) as day, COUNT(*) as total_orders, COALESCE(SUM(total_price),0) as total_revenue")
+            ->groupBy('day')
+            ->get();
+
+        $ordersCountByDay = $ordersQuery->pluck('total_orders', 'day')->toArray();
+        $revenueByDay = $ordersQuery->pluck('total_revenue', 'day')->toArray();
+
+        $series = [];
+        for ($i = 0; $i < $days; $i++) {
+            $date = Carbon::now()->subDays($days - 1 - $i)->format('Y-m-d');
+
+            $series[] = [
+                'date' => $date,
+                'views' => (int) ($viewsQuery[$date] ?? 0),
+                'comments' => (int) ($commentsQuery[$date] ?? 0),
+                'orders' => (int) ($ordersCountByDay[$date] ?? 0),
+                'revenue' => round((float) ($revenueByDay[$date] ?? 0), 2),
+            ];
+        }
+
         return response()->json([
             'scope' => 'advertiser',
             'advertiser_id' => $advertiserId,
@@ -106,6 +153,7 @@ class ApiAnalyticsController extends Controller
             'total_comments' => $totalComments,
             'total_orders' => $totalOrders,
             'total_revenue' => round($totalRevenue, 2),
+            'series' => $series,
         ]);
     }
 
