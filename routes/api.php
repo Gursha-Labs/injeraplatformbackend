@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::delete('/profile/advertiser/picture', [AdvertiserProfileController::class, 'deleteProfilePicture']);
     Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
     Route::get('/advertiser/video/{id}', [AdvertiserProfileController::class, 'get_video_by_id']);
-
+    Route::get('/analytics/adertiser-analysis', [ApiAnalyticsController::class, 'adertiser_analysis']);
     // Unified Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);

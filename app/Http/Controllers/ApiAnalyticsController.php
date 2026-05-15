@@ -3,7 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApiLog;
+use App\Models\AdVideo;
+use App\Models\AdView;
+use App\Models\AdComment;
+use App\Models\Order;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ApiAnalyticsController extends Controller
 {
@@ -59,6 +64,49 @@ class ApiAnalyticsController extends Controller
             ->get();
 
         return response()->json($data);
+    }
+
+    public function adertiser_analysis()
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        if ($user->type !== 'advertiser') {
+            return response()->json(['error' => 'Access denied. Advertiser only.'], 403);
+        }
+
+        $advertiserId = $user->id;
+
+        $totalAds = AdVideo::where('advertiser_id', $advertiserId)->count();
+
+        $totalViews = AdView::whereHas('ad', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->count();
+
+        $totalComments = AdComment::whereHas('adVideo', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->count();
+
+        $totalOrders = Order::whereHas('adVideo', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->count();
+
+        $totalRevenue = (float) Order::whereHas('adVideo', function ($q) use ($advertiserId) {
+            $q->where('advertiser_id', $advertiserId);
+        })->sum('total_price');
+
+        return response()->json([
+            'scope' => 'advertiser',
+            'advertiser_id' => $advertiserId,
+            'total_ads' => $totalAds,
+            'total_views' => $totalViews,
+            'total_comments' => $totalComments,
+            'total_orders' => $totalOrders,
+            'total_revenue' => round($totalRevenue, 2),
+        ]);
     }
 
     public function errorRate()
