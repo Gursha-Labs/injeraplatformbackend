@@ -62,6 +62,26 @@ class UserSubscriptionController extends Controller
         $plan = Subscription::find($request->subscription_id);
         if (!$plan) return response()->json(['message' => 'Subscription plan not found'], 404);
 
+        $activeSubscription = UserSubscription::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->where('starts_at', '<=', now())
+            ->where('expires_at', '>', now())
+            ->with('subscription')
+            ->latest('expires_at')
+            ->first();
+        if ($activeSubscription && $activeSubscription->subscription) {
+            $videoLimit = (int) $activeSubscription->subscription->video_upload_limit;
+            $currentUploads = \App\Models\AdVideo::where('advertiser_id', $user->id)
+                ->where('created_at', '>=', $activeSubscription->starts_at)
+                ->count();
+
+            if ($videoLimit <= 0 || $currentUploads < $videoLimit) {
+                return response()->json([
+                    'message' => 'Already subscribed.'
+                ], 409);
+            }
+        }
+
         $startsAt = $request->filled('starts_at') ? now()->parse($request->starts_at) : now();
         $expiresAt = $startsAt->copy()->addDays($plan->duration_days);
         $chargeAmount = (float) $plan->price;
