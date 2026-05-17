@@ -39,11 +39,13 @@ class CheckPaidstatus
         }
 
         $videoLimit = (int) $activeSubscription->subscription->video_upload_limit;
-        $currentUploads = AdVideo::where('advertiser_id', $user->id)->count();
+        $currentUploads = AdVideo::where('advertiser_id', $user->id)
+            ->where('created_at', '>=', $activeSubscription->starts_at)
+            ->count();
 
         if ($videoLimit > 0 && $currentUploads >= $videoLimit) {
             return response()->json([
-                'message' => 'Your subscription upload limit has been reached.'
+                'message' => 'Please subscribe to upload more videos.'
             ], 403);
         }
 

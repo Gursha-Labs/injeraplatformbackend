@@ -78,10 +78,20 @@ class UserSubscriptionController extends Controller
             $wallet->balance = (float) $wallet->balance - $chargeAmount;
             $wallet->save();
 
-            // deactivate existing active subscriptions if overlapping
-            UserSubscription::where('user_id', $user->id)->where('status', 'active')->update(['status' => 'expired']);
+            $existingSubscription = UserSubscription::where('user_id', $user->id)
+                ->orderByDesc('created_at')
+                ->lockForUpdate()
+                ->first();
 
-            $us = UserSubscription::create([
+            // keep a single current subscription row per user and refresh it on renewals
+            UserSubscription::where('user_id', $user->id)
+                ->where('status', 'active')
+                ->when($existingSubscription, function ($query) use ($existingSubscription) {
+                    $query->where('id', '!=', $existingSubscription->id);
+                })
+                ->update(['status' => 'expired']);
+
+            $subscriptionData = [
                 'user_id' => $user->id,
                 'subscription_id' => $plan->id,
                 'starts_at' => $startsAt,
@@ -90,7 +100,18 @@ class UserSubscriptionController extends Controller
                 'payment_reference' => $request->payment_reference ?? null,
                 'payment_provider' => $request->payment_provider ?? null,
                 'amount_paid' => $chargeAmount,
-            ]);
+                'cancelled_at' => null,
+            ];
+
+            if ($existingSubscription) {
+                $existingSubscription->fill($subscriptionData);
+                $existingSubscription->save();
+                $us = $existingSubscription;
+                $wasCreated = false;
+            } else {
+                $us = UserSubscription::create($subscriptionData);
+                $wasCreated = true;
+            }
 
             // sync advertiser profile summary fields if present
             if ($user->advertiserProfile) {
@@ -107,7 +128,7 @@ class UserSubscriptionController extends Controller
                 'message' => 'Subscription activated',
                 'subscription' => $us->load('subscription'),
                 'wallet_balance' => $wallet->balance,
-            ], 201);
+            ], $wasCreated ? 201 : 200);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => 'Failed to create subscription', 'error' => $e->getMessage()], 500);
