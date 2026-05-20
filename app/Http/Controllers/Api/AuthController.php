@@ -60,6 +60,16 @@ class AuthController extends Controller
         DB::beginTransaction();
 
         try {
+            // Defensive check: payment processors must be created by admin only
+            if ($request->filled('type') && $request->type === 'payment_processor') {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'Registration as payment processor is not allowed',
+                    'error' => 'Payment processors can only be created by an administrator.'
+                ], 403);
+            }
+
             $existingUnverifiedUser = User::where(function ($query) use ($request) {
                 $query->where('email', strtolower(trim($request->email)))
                     ->orWhere('username', $request->username);
