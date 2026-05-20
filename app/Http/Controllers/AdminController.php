@@ -12,6 +12,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class AdminController extends Controller
 {
@@ -131,96 +132,94 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'User has been unblocked.']);
     }
 
-public function assign_role(Request $request, $userId)
-{
-    try {
-        $admin = Auth::user();
+    public function assign_role(Request $request, $userId)
+    {
+        try {
+            $admin = Auth::user();
 
-        // ✅ Auth check
-        if (!$admin || $admin->type !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied'
-            ], 403);
-        }
+            // ✅ Auth check
+            if (!$admin || $admin->type !== 'admin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied'
+                ], 403);
+            }
 
-        // ✅ Validation
-        $validated = $request->validate([
-            'role' => ['required', Rule::in(['admin', 'user', 'advertiser', 'payment_processor'])],
-        ]);
+            // ✅ Validation
+            $validated = $request->validate([
+                'role' => ['required', Rule::in(['admin', 'user', 'advertiser', 'payment_processor'])],
+            ]);
 
-        $user = User::find($userId);
+            $user = User::find($userId);
 
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found'
-            ], 404);
-        }
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
 
-        $role = $validated['role'];
+            $role = $validated['role'];
 
-        // ✅ Prevent unnecessary update
-        if ($user->type === $role && $user->hasRole($role)) {
+            // ✅ Prevent unnecessary update
+            if ($user->type === $role && $user->hasRole($role)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "User already has role '{$role}'",
+                    'data' => $user
+                ]);
+            }
+
+            DB::beginTransaction();
+
+            // ✅ Assign role (Spatie)
+            $user->syncRoles([$role]);
+
+            // ✅ Update type (since enum now supports it)
+            $user->type = $role;
+            $user->save();
+
+            // ✅ Activity log
+            UserActivity::record(
+                $user,
+                'role_assigned',
+                "Role '{$role}' was assigned by admin.",
+                ['role' => $role],
+                $admin,
+                $request
+            );
+
+            DB::commit();
+
+            // ✅ Reload fresh user with roles
+            $user->load('roles');
+
             return response()->json([
                 'success' => true,
-                'message' => "User already has role '{$role}'",
+                'message' => "Role '{$role}' has been assigned successfully.",
                 'data' => $user
             ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Assign Role Error', [
+                'error' => $e->getMessage(),
+                'userId' => $userId
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Something went wrong while assigning role',
+                'error' => app()->environment('local') ? $e->getMessage() : null
+            ], 500);
         }
-
-        DB::beginTransaction();
-
-        // ✅ Assign role (Spatie)
-        $user->syncRoles([$role]);
-
-        // ✅ Update type (since enum now supports it)
-        $user->type = $role;
-        $user->save();
-
-        // ✅ Activity log
-        UserActivity::record(
-            $user,
-            'role_assigned',
-            "Role '{$role}' was assigned by admin.",
-            ['role' => $role],
-            $admin,
-            $request
-        );
-
-        DB::commit();
-
-        // ✅ Reload fresh user with roles
-        $user->load('roles');
-
-        return response()->json([
-            'success' => true,
-            'message' => "Role '{$role}' has been assigned successfully.",
-            'data' => $user
-        ]);
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 422);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-
-        Log::error('Assign Role Error', [
-            'error' => $e->getMessage(),
-            'userId' => $userId
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Something went wrong while assigning role',
-            'error' => app()->environment('local') ? $e->getMessage() : null
-        ], 500);
     }
-}
 
 
 
@@ -249,5 +248,181 @@ public function assign_role(Request $request, $userId)
             ],
             'activities' => $activities
         ]);
+    }
+    public function create_payment_processor(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!$user || $user->type !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
+        }
+
+        $validationRules = [
+            'username' => 'required|string|unique:users,username',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:8',
+        ];
+
+        $validator = Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        $paymentProcessor = User::create([
+            'username' => $validated['username'],
+            'email' => $validated['email'],
+            'password' => bcrypt($validated['password']),
+            'type' => 'payment_processor',
+            'points' => 0,
+            'is_blocking' => false,
+            'last_active_at' => now(),
+        ]);
+
+        // Assign the Spatie role for payment processors so permissions work correctly
+        if (method_exists($paymentProcessor, 'syncRoles')) {
+            $paymentProcessor->syncRoles(['payment_processor']);
+            $paymentProcessor->load('roles');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment processor created successfully',
+            'data' => $paymentProcessor
+        ], 201);
+    }
+
+    public function list_payment_processors()
+    {
+        $user = Auth::user();
+
+        if (!$user || $user->type !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
+        }
+
+        $paymentProcessors = User::where('type', 'payment_processor')
+            ->select('id', 'username', 'email', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => $paymentProcessors
+        ], 200);
+    }
+
+    public function delete_payment_processor($id)
+    {
+        $user = Auth::user();
+
+        if (!$user || $user->type !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
+        }
+
+        $paymentProcessor = User::where('type', 'payment_processor')->find($id);
+
+        if (!$paymentProcessor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment processor not found'
+            ], 404);
+        }
+
+        $paymentProcessor->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment processor deleted successfully'
+        ], 200);
+    }
+
+    public function update_payment_processor(Request $request, $id)
+    {
+        $admin = Auth::user();
+
+        if (!$admin || $admin->type !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
+        }
+
+        $paymentProcessor = User::where('type', 'payment_processor')->find($id);
+
+        if (!$paymentProcessor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment processor not found'
+            ], 404);
+        }
+
+        $validationRules = [
+            'username' => ['sometimes', 'string', Rule::unique('users', 'username')->ignore($paymentProcessor->id)],
+            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($paymentProcessor->id)],
+            'password' => ['sometimes', 'nullable', 'min:8'],
+        ];
+
+        $validator = Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        if (array_key_exists('username', $data)) {
+            $paymentProcessor->username = $data['username'];
+        }
+
+        if (array_key_exists('email', $data)) {
+            $paymentProcessor->email = $data['email'];
+        }
+
+        if (array_key_exists('password', $data) && $data['password']) {
+            $paymentProcessor->password = bcrypt($data['password']);
+        }
+
+        $paymentProcessor->save();
+
+        // Ensure the processor retains the proper role and load roles for response
+        if (method_exists($paymentProcessor, 'syncRoles')) {
+            $paymentProcessor->syncRoles(['payment_processor']);
+            $paymentProcessor->load('roles');
+        }
+
+        // Activity log
+        if (method_exists('App\\Models\\UserActivity', 'record')) {
+            UserActivity::record(
+                $paymentProcessor,
+                'payment_processor_updated',
+                'Payment processor updated by admin.',
+                ['changes' => $data],
+                $admin,
+                $request
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment processor updated successfully',
+            'data' => $paymentProcessor
+        ], 200);
     }
 }
