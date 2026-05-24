@@ -6,6 +6,7 @@ use App\Models\UserSubscription;
 use Illuminate\Http\Request;
 use App\Models\Subscription;
 use App\Models\Wallet;
+use App\Services\SystemBalanceService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -143,6 +144,15 @@ class UserSubscriptionController extends Controller
                 ]);
             }
 
+            if ($chargeAmount > 0) {
+                app('App\\Services\\SystemBalanceService')->recordAdded($chargeAmount, [
+                    'source_type' => 'user_subscription',
+                    'source_id' => $us->id,
+                    'user_id' => $user->id,
+                    'description' => 'Advertiser subscription payment',
+                ]);
+            }
+
             DB::commit();
             return response()->json([
                 'message' => 'Subscription activated',
@@ -215,6 +225,13 @@ class UserSubscriptionController extends Controller
 
                         $wallet->balance = (float) $wallet->balance - $chargeAmount;
                         $wallet->save();
+
+                        app('App\\Services\\SystemBalanceService')->recordAdded($chargeAmount, [
+                            'source_type' => 'user_subscription',
+                            'source_id' => $userSubscription->id,
+                            'user_id' => $userSubscription->user_id,
+                            'description' => 'Advertiser subscription activation payment',
+                        ]);
                     }
                 }
 

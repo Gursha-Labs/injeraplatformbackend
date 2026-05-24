@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Game_player;
 use App\Models\Variables;
 use App\Models\Wallet;
+use App\Services\SystemBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -35,108 +36,132 @@ class Game_playerController extends Controller
     {
         //
     }
-// In your SpinWheel or SlotMachine controller
-public function spin(Request $request)
-{
-    $user = Auth::user();
-    $gameId = $request->game_id;
+    // In your SpinWheel or SlotMachine controller
+    public function spin(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $gameId = $request->game_id;
 
-    // Get bet amount
-    $betAmount = Variables::where('type', 'bet_point')->first()->value;
+        // Get bet amount
+        $betAmount = Variables::where('type', 'bet_point')->first()->value;
 
-    // Check if user has enough points
-    if ($betAmount > $user->points) {
-        return response()->json([
-            'error' => 'Insufficient points to place the bet'
-        ], 400);
-    }
+        // Check if user has enough points
+        if ($betAmount > $user->points) {
+            return response()->json([
+                'error' => 'Insufficient points to place the bet'
+            ], 400);
+        }
 
-    // Get or create game player
-    $gamePlayer = Game_Player::firstOrCreate([
-        'user_id' => $user->id,
-        'game_id' => $gameId,
-        "is_active" => true,
-        "is_banned" => false,
-    ]);
+        // Get or create game player
+        $gamePlayer = Game_Player::firstOrCreate([
+            'user_id' => $user->id,
+            'game_id' => $gameId,
+            "is_active" => true,
+            "is_banned" => false,
+        ]);
 
-    // Check if player is active and not banned
-    if (!$gamePlayer->is_active || $gamePlayer->is_banned) {
-        return response()->json([
-            'error' => 'You are not allowed to play this game'
-        ], 403);
-    }
+        // Check if player is active and not banned
+        if (!$gamePlayer->is_active || $gamePlayer->is_banned) {
+            return response()->json([
+                'error' => 'You are not allowed to play this game'
+            ], 403);
+        }
 
-    // Deduct bet points
-    $user->points -= $betAmount;
-    $user->save();
+        // Deduct bet points
+        $user->points -= $betAmount;
+        $user->save();
 
-    // Load active rewards
-    $rewards = DB::table('rewards')->where('is_active', true)->get()->values();
+        // Load active rewards
+        $rewards = DB::table('rewards')->where('is_active', true)->get()->values();
 
-    if ($rewards->isEmpty()) {
-        return response()->json([
-            'error' => 'No rewards configured'
-        ], 500);
-    }
+        if ($rewards->isEmpty()) {
+            return response()->json([
+                'error' => 'No rewards configured'
+            ], 500);
+        }
 
-    // Select reward
-    if (!$gamePlayer->is_allowed) {
-        // Player not allowed to win → force lose
-        $selectedReward = $rewards->firstWhere('type', 'lose');
-    } else {
-        // Weighted probability selection
-        $totalProbability = $rewards->sum('probability');
-        $rand = rand(1, $totalProbability);
-        $current = 0;
+        // Select reward
+        $selectedReward = null;
 
-        foreach ($rewards as $reward) {
-            $current += $reward->probability;
-            if ($rand <= $current) {
-                $selectedReward = $reward;
-                break;
+        if (!$gamePlayer->is_allowed) {
+            // Player not allowed to win → force lose
+            $selectedReward = $rewards->firstWhere('type', 'lose');
+        } else {
+            // Weighted probability selection
+            $totalProbability = $rewards->sum('probability');
+            $rand = rand(1, $totalProbability);
+            $current = 0;
+
+            foreach ($rewards as $reward) {
+                $current += $reward->probability;
+                if ($rand <= $current) {
+                    $selectedReward = $reward;
+                    break;
+                }
             }
         }
-    }
 
-    // Find segment index for frontend wheel animation
-    $rewardIndex = $rewards->search(fn($item) => $item->id === $selectedReward->id);
+        // Find segment index for frontend wheel animation
+        $rewardIndex = $rewards->search(fn($item) => $item->id === $selectedReward->id);
 
-    // Determine win state
-    $isWinner = $selectedReward->type !== 'lose';
-    $winAmount = 0;
+        // Determine win state
+        $isWinner = $selectedReward->type !== 'lose';
+        $winAmount = 0;
 
-    // Apply reward
-    if ($isWinner) {
-        if ($selectedReward->type == 'point') {
-            $winAmount = $selectedReward->value;
-            $user->points += $winAmount;
-            $user->save();
-        } elseif ($selectedReward->type == 'money') {
-            $winAmount = $selectedReward->value;
-            $wallet = Wallet::firstOrCreate(['user_id' => $user->id]);
-            $wallet->balance += $winAmount;
-            $wallet->save();
+        // Apply reward
+        if ($isWinner) {
+            if ($selectedReward->type == 'point') {
+                $winAmount = $selectedReward->value;
+                $user->points += $winAmount;
+                $user->save();
+            } elseif ($selectedReward->type == 'money') {
+                $winAmount = $selectedReward->value;
+                try {
+                    DB::transaction(function () use ($user, $selectedReward, $winAmount) {
+                        $wallet = Wallet::firstOrCreate(['user_id' => $user->id], ['balance' => 0]);
+                        $wallet->balance += $winAmount;
+                        $wallet->save();
+
+                        app('App\\Services\\SystemBalanceService')->recordMinus($winAmount, [
+                            'source_type' => 'reward',
+                            'source_id' => $selectedReward->id,
+                            'user_id' => $user->id,
+                            'description' => 'Money reward paid from game spin',
+                        ]);
+                    });
+                } catch (\Exception $e) {
+                    Log::error('Failed to process money reward', [
+                        'user_id' => $user->id,
+                        'reward_id' => $selectedReward->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    return response()->json([
+                        'error' => 'Failed to process money reward'
+                    ], 500);
+                }
+            }
         }
+
+        // Update player statistics
+        $gamePlayer->updateAfterSpin($isWinner, $betAmount, $winAmount);
+
+        // Return response
+        return response()->json([
+            'segment_index' => $rewardIndex,
+            'reward_id' => $selectedReward->id,
+            'reward_name' => $selectedReward->name,
+            'reward_type' => $selectedReward->type,
+            'reward_value' => $selectedReward->value,
+            'is_winner' => $isWinner,
+            'win_amount' => $winAmount,
+            'user_points' => $user->point,
+            'message' => $isWinner
+                ? "You won {$selectedReward->name}"
+                : "Better luck next time"
+        ]);
     }
-
-    // Update player statistics
-    $gamePlayer->updateAfterSpin($isWinner, $betAmount, $winAmount);
-
-    // Return response
-    return response()->json([
-        'segment_index' => $rewardIndex,
-        'reward_id' => $selectedReward->id,
-        'reward_name' => $selectedReward->name,
-        'reward_type' => $selectedReward->type,
-        'reward_value' => $selectedReward->value,
-        'is_winner' => $isWinner,
-        'win_amount' => $winAmount,
-        'user_points' => $user->point,
-        'message' => $isWinner
-            ? "You won {$selectedReward->name}"
-            : "Better luck next time"
-    ]);
-}
     /**
      * Update the specified resource in storage.
      */

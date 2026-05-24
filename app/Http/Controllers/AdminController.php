@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
 use App\Models\User;
 use App\Models\AdVideo;
+use App\Services\SystemBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -375,7 +376,7 @@ class AdminController extends Controller
             'username' => ['sometimes', 'string', Rule::unique('users', 'username')->ignore($paymentProcessor->id)],
             'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($paymentProcessor->id)],
             'password' => ['sometimes', 'nullable', 'min:8'],
-            
+
         ];
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -440,14 +441,7 @@ class AdminController extends Controller
             ], 403);
         }
 
-        $totalIncome = DB::table('user_subscriptions as us')
-            ->join('subscriptions as s', 'us.subscription_id', '=', 's.id')
-            ->selectRaw("COALESCE(SUM(CASE
-                WHEN us.amount_paid IS NOT NULL AND us.amount_paid > 0 THEN us.amount_paid
-                WHEN us.status IN ('active', 'expired', 'cancelled') THEN s.price
-                ELSE 0
-            END), 0) as total_income")
-            ->value('total_income');
+        $totalIncome = app('App\\Services\\SystemBalanceService')->getCurrentBalance();
 
         return response()->json([
             'success' => true,
