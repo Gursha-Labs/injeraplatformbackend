@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -144,6 +145,27 @@ class UserProfileController extends Controller
 
         return response()->json([
             'message' => 'Account deleted successfully'
+        ]);
+    }
+
+
+
+    public function withdrawal_history(Request $request)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if (!$user->isUser()) {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $perPage = (int) $request->query('per_page', 15);
+        $withdrawals = $user->withdrawals()
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+
+        return response()->json([
+            'withdrawals' => $withdrawals
         ]);
     }
 }

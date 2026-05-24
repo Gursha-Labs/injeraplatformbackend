@@ -212,4 +212,9 @@ return response()->json([
 
         return response()->json(['message' => 'Profile picture deleted successfully']);
     }
+
+
+
+
+    
 }

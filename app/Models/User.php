@@ -8,6 +8,7 @@ use Laravel\Sanctum\HasApiTokens;
 use App\Traits\HasUuid;
 use Spatie\Permission\Traits\HasRoles;
 use App\Models\UserSubscription;
+use App\Models\Withdrawals;
 
 class User extends Authenticatable
 {
@@ -83,6 +84,11 @@ class User extends Authenticatable
     public function activities()
     {
         return $this->hasMany(UserActivity::class, 'user_id');
+    }
+
+    public function withdrawals()
+    {
+        return $this->hasMany(Withdrawals::class, 'user_id');
     }
 
     // Role helpers
