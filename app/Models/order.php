@@ -13,6 +13,11 @@ class Order extends Model
         'total_price',
     ];
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function adVideo()
     {
         return $this->belongsTo(AdVideo::class, 'video_id');
