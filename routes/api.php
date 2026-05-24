@@ -118,7 +118,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     //calculate the system's total balance
     Route::get('/system/balance', [AdminController::class, 'over_view']);
     //withrrawal history for user
-    Route::get('/withdrawals/history', [UserProfileController::class, 'witdrawal_history']);
+    Route::get('/withdrawals/history', [UserProfileController::class, 'withdrawal_history']);
     // user subscription routes
     Route::get('/user-subscriptions', [UserSubscriptionController::class, 'index']);
     Route::post('/user-subscriptions', [UserSubscriptionController::class, 'store']);
