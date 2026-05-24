@@ -103,11 +103,12 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     //assign role to user
     Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
     //create payment processor
-
+  //payment proccessor routes
     Route::post('/payment-processors', [AdminController::class, 'create_payment_processor']);
+    Route::get('/payment-processors', [AdminController::class, 'list_payment_processors']);
     //update payment processor
     Route::put('/payment-processors/{processorId}', [AdminController::class, 'update_payment_processor']);
-    //chapa integration
+    Route::delete('/payment-processors/{processorId}', [AdminController::class, 'delete_payment_processor']);
     Route::post('/deposit', [DepositeController::class, 'store']);
     Route::post('/process-payment-manually', [DepositeController::class, 'processPaymentManually']);
     Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
