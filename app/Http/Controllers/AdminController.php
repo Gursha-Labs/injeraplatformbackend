@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
 use App\Models\User;
 use App\Models\AdVideo;
+use App\Models\SystemBalance;
+use App\Models\Transaction;
+use App\Models\Withdrawals;
 use App\Services\SystemBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +42,7 @@ class AdminController extends Controller
         $totalVideos = AdVideo::count();
         $totalViews = AdVideo::sum('view_count');
         $totalPointsDistributed = User::sum('points');
+        $financialOverview = $this->buildFinancialOverview();
 
         // LISTS (with pagination)
         $allUsers = User::orderBy('created_at', 'desc')
@@ -70,7 +74,12 @@ class AdminController extends Controller
                     'total_videos' => $totalVideos,
                     'total_views' => $totalViews,
                     'total_points_distributed' => $totalPointsDistributed,
+                    'total_deposit' => $financialOverview['summary']['total_deposit'],
+                    'total_withdraw' => $financialOverview['summary']['total_withdraw'],
+                    'total_reward' => $financialOverview['summary']['total_reward'],
+                    'system_balance' => $financialOverview['summary']['system_balance'],
                 ],
+                'financial' => $financialOverview,
                 'lists' => [
                     'all_users' => $allUsers,
                     'regular_users' => $regularUsers,
@@ -430,7 +439,7 @@ class AdminController extends Controller
     }
 
 
-    public function income_for_the_system()
+    public function over_view()
     {
         $admin = Auth::user();
 
@@ -441,11 +450,85 @@ class AdminController extends Controller
             ], 403);
         }
 
-        $totalIncome = app('App\\Services\\SystemBalanceService')->getCurrentBalance();
+        $financialOverview = $this->buildFinancialOverview();
 
         return response()->json([
             'success' => true,
-            'total_income' => $totalIncome
+            'summary' => $financialOverview['summary'],
+            'charts' => $financialOverview['charts'],
+            'history' => $financialOverview['history'],
         ], 200);
+    }
+
+    private function buildFinancialOverview(): array
+    {
+        $totalUsers = User::whereIn('type', ['user', 'advertiser'])->count();
+        $totalDeposit = (float) Transaction::where('status', 'success')->sum('amount');
+        $totalWithdraw = (float) Withdrawals::where('status', 'paid')->sum('amount');
+        $totalReward = (float) SystemBalance::where('movement_type', 'minus')
+            ->where('source_type', 'reward')
+            ->sum('amount');
+        $systemBalance = (float) app(SystemBalanceService::class)->getCurrentBalance();
+
+        $latestMovement = SystemBalance::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $depositShare = $totalDeposit + $totalWithdraw > 0
+            ? round(($totalDeposit / ($totalDeposit + $totalWithdraw)) * 100, 2)
+            : 0;
+
+        $withdrawShare = $totalDeposit + $totalWithdraw > 0
+            ? round(($totalWithdraw / ($totalDeposit + $totalWithdraw)) * 100, 2)
+            : 0;
+
+        $depositByDay = Transaction::query()
+            ->where('status', 'success')
+            ->selectRaw('DATE(created_at) as date, COALESCE(SUM(amount), 0) as total')
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date')
+            ->get();
+
+        $withdrawByDay = Withdrawals::query()
+            ->where('status', 'paid')
+            ->selectRaw('DATE(created_at) as date, COALESCE(SUM(amount), 0) as total')
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date')
+            ->get();
+
+        $systemBalanceHistory = SystemBalance::query()
+            ->select('movement_type', 'amount', 'source_type', 'balance_before', 'balance_after', 'created_at')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+
+        return [
+            'summary' => [
+                'total_users' => $totalUsers,
+                'total_deposit' => $totalDeposit,
+                'total_withdraw' => $totalWithdraw,
+                'total_reward' => $totalReward,
+                'system_balance' => $systemBalance,
+                'system_balance_before' => $latestMovement ? (float) $latestMovement->balance_before : 0.0,
+                'system_balance_after' => $latestMovement ? (float) $latestMovement->balance_after : 0.0,
+            ],
+            'charts' => [
+                'deposit_withdraw_pie' => [
+                    'labels' => ['Deposit', 'Withdrawal'],
+                    'values' => [$totalDeposit, $totalWithdraw],
+                    'percentages' => [
+                        'deposit' => $depositShare,
+                        'withdrawal' => $withdrawShare,
+                    ],
+                ],
+                'daily_flow' => [
+                    'deposit_by_day' => $depositByDay,
+                    'withdraw_by_day' => $withdrawByDay,
+                ],
+            ],
+            'history' => $systemBalanceHistory,
+        ];
     }
 }

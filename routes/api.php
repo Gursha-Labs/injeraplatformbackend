@@ -115,7 +115,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/debug-transaction/{tx_ref}', [DepositeController::class, 'debugTransaction']);
     Route::get('/wallet/balance', [DepositeController::class, 'getWalletBalance']);
     //calculate the system's total balance
-    Route::get('/system/balance', [AdminController::class, 'income_for_the_system']);
+    Route::get('/system/balance', [AdminController::class, 'over_view']);
     // user subscription routes
     Route::get('/user-subscriptions', [UserSubscriptionController::class, 'index']);
     Route::post('/user-subscriptions', [UserSubscriptionController::class, 'store']);
