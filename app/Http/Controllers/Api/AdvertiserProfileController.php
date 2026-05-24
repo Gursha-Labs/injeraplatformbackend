@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdVideo;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,57 +13,55 @@ use Illuminate\Support\Facades\Validator;
 
 class AdvertiserProfileController extends Controller
 {
-public function show(Request $request)
-{
-$user = Auth::user();
+    public function show(Request $request)
+    {
+        $user = Auth::user();
 
-if ($user->type !== 'advertiser') {
-    return response()->json(['error' => 'Access denied'], 403);
-}
+        if ($user->type !== 'advertiser') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
 
-$profile = $user->advertiserProfile;
+        $profile = $user->advertiserProfile;
 
-return response()->json([
-// user table
-'user_id' => $user->id,
-'username' => $user->username,
-'email' => $user->email,
-'type' => $user->type,
-'email_verified_at' => $user->email_verified_at,
-'user_created_at' => $user->created_at,
-'user_updated_at' => $user->updated_at,
+        return response()->json([
+            // user table
+            'user_id' => $user->id,
+            'username' => $user->username,
+            'email' => $user->email,
+            'type' => $user->type,
+            'email_verified_at' => $user->email_verified_at,
+            'user_created_at' => $user->created_at,
+            'user_updated_at' => $user->updated_at,
 
-// advertiser_profiles table
-'advertiser_profile_id' => $profile->id ?? null,
-'company_name' => $profile->company_name ?? null,
-'business_email' => $profile->business_email ?? null,
-'phone_number' => $profile->phone_number ?? null,
-'website' => $profile->website ?? null,
-'logo' => $profile->logo ?? null,
-'profile_picture' => $profile->profile_picture ?? null,
-'cover_image' => $profile->cover_image ?? null,
-'description' => $profile->description ?? null,
-'country' => $profile->country ?? null,
-'city' => $profile->city ?? null,
-'address' => $profile->address ?? null,
-'social_media_links' => $profile->social_media_links ?? [],
-'total_ads_uploaded' => $profile->total_ads_uploaded ?? 0,
-'total_ad_views' => $profile->total_ad_views ?? 0,
-'total_spent' => $profile->total_spent ?? "0.00",
-'subscription_plan' => $profile->subscription_plan ?? null,
-'subscription_active' => $profile->subscription_active ?? false,
-'notifications_enabled' => $profile->notifications_enabled ?? false,
-'email_notifications' => $profile->email_notifications ?? false,
-'is_active' => $profile->is_active ?? false,
-'last_active_at' => $profile->last_active_at ?? null,
-'advertiser_created_at' => $profile->created_at ?? null,
-'advertiser_updated_at' => $profile->updated_at ?? null
-
-
-]);
+            // advertiser_profiles table
+            'advertiser_profile_id' => $profile->id ?? null,
+            'company_name' => $profile->company_name ?? null,
+            'business_email' => $profile->business_email ?? null,
+            'phone_number' => $profile->phone_number ?? null,
+            'website' => $profile->website ?? null,
+            'logo' => $profile->logo ?? null,
+            'profile_picture' => $profile->profile_picture ?? null,
+            'cover_image' => $profile->cover_image ?? null,
+            'description' => $profile->description ?? null,
+            'country' => $profile->country ?? null,
+            'city' => $profile->city ?? null,
+            'address' => $profile->address ?? null,
+            'social_media_links' => $profile->social_media_links ?? [],
+            'total_ads_uploaded' => $profile->total_ads_uploaded ?? 0,
+            'total_ad_views' => $profile->total_ad_views ?? 0,
+            'total_spent' => $profile->total_spent ?? "0.00",
+            'subscription_plan' => $profile->subscription_plan ?? null,
+            'subscription_active' => $profile->subscription_active ?? false,
+            'notifications_enabled' => $profile->notifications_enabled ?? false,
+            'email_notifications' => $profile->email_notifications ?? false,
+            'is_active' => $profile->is_active ?? false,
+            'last_active_at' => $profile->last_active_at ?? null,
+            'advertiser_created_at' => $profile->created_at ?? null,
+            'advertiser_updated_at' => $profile->updated_at ?? null
 
 
-}
+        ]);
+    }
     public function update(Request $request)
     {
         $user = $request->user();
@@ -140,8 +139,8 @@ return response()->json([
                 return [
                     'id' => $video->id,
                     'title' => $video->title,
-                    'thumbnail_url' => $video->thumbnail_url ,
-                    'video_url' => $video->video_url ,
+                    'thumbnail_url' => $video->thumbnail_url,
+                    'video_url' => $video->video_url,
                     'views' => $video->views()->count(),
                 ];
             }),
@@ -150,30 +149,31 @@ return response()->json([
 
 
 
-  public function owen_videos(Request $request)
-{
-    $user = Auth::user();
+    public function owen_videos(Request $request)
+    {
+        $user = Auth::user();
 
-    if ($user->type !== 'advertiser') {
-        return response()->json(['error' => 'You are not advertiser'], 403);
+        if ($user->type !== 'advertiser') {
+            return response()->json(['error' => 'You are not advertiser'], 403);
+        }
+
+        $advertiser = $user->advertiserProfile;
+
+        $perPage = $request->input('per_page', 10);
+
+        $ads = $advertiser
+            ->adVideos()
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+
+        return response()->json($ads);
     }
 
-    $advertiser = $user->advertiserProfile;
 
-    $perPage = $request->input('per_page', 10);
+    public function get_video_by_id($id)
+    {
 
-    $ads = $advertiser
-        ->adVideos()
-        ->orderByDesc('created_at')
-        ->paginate($perPage);
-
-    return response()->json($ads);
-}
-
-
-   public function get_video_by_id($id){
-     
-     $advido = AdVideo::findOrFail($id);
+        $advido = AdVideo::findOrFail($id);
 
         return response()->json([
             'ad_video_id' => $advido->id,
@@ -188,13 +188,11 @@ return response()->json([
             'created_at' => $advido->created_at,
             'updated_at' => $advido->updated_at,
         ]);
+    }
 
 
-   }
 
 
-
- 
     public function deleteProfilePicture(Request $request)
     {
         $user = $request->user();
@@ -213,8 +211,35 @@ return response()->json([
         return response()->json(['message' => 'Profile picture deleted successfully']);
     }
 
+    public function deposit_history(Request $request)
+    {
+        /** @var User $user */
+        $user = Auth::user();
 
+        if (!$user || $user->type !== 'advertiser') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
 
+        $perPage = (int) $request->query('per_page', 15);
 
-    
+        $deposits = Transaction::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'success')
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->through(function (Transaction $transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'tx_ref' => $transaction->tx_ref,
+                    'amount' => $transaction->amount,
+                    'status' => $transaction->status,
+                    'created_at' => $transaction->created_at,
+                    'updated_at' => $transaction->updated_at,
+                ];
+            });
+
+        return response()->json([
+            'deposits' => $deposits,
+        ]);
+    }
 }

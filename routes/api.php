@@ -53,6 +53,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::post('/profile/advertiser', [AdvertiserProfileController::class, 'update']);
     Route::get('/advertiser/public/{userId}', [AdvertiserProfileController::class, 'publicProfile']);
     Route::delete('/profile/advertiser/picture', [AdvertiserProfileController::class, 'deleteProfilePicture']);
+    Route::get('/advertiser/deposits-history', [AdvertiserProfileController::class, 'deposit_history']);
     Route::get('/owen-videos', [AdvertiserProfileController::class, 'owen_videos']);
     Route::get('/advertiser/video/{id}', [AdvertiserProfileController::class, 'get_video_by_id']);
     Route::get('/analytics/adertiser-analysis', [ApiAnalyticsController::class, 'adertiser_analysis']);
@@ -104,7 +105,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     //assign role to user
     Route::post('/assign-role/{userId}', [AdminController::class, 'assign_role']);
     //create payment processor
-  //payment proccessor routes
+    //payment proccessor routes
     Route::post('/payment-processors', [AdminController::class, 'create_payment_processor']);
     Route::get('/payment-processors', [AdminController::class, 'list_payment_processors']);
     //update payment processor

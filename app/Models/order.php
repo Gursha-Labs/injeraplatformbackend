@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+        use HasUuid;
+
     protected $fillable = [
         'user_id',
         'video_id',
