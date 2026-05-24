@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'blocked'])->group(function () {
     Route::get('/profile/user', [UserProfileController::class, 'show']);
     Route::post('/profile/user', [UserProfileController::class, 'update']);
     Route::delete('/profile/user/picture', [UserProfileController::class, 'deleteProfilePicture']);
+    Route::delete('/account/delete', [UserProfileController::class, 'delete_account']);
 
     // Advertiser Profile
     Route::get('/profile/advertiser', [AdvertiserProfileController::class, 'show']);

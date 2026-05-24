@@ -137,7 +137,6 @@ class UserSubscriptionController extends Controller
             // sync advertiser profile summary fields if present
             if ($user->advertiserProfile) {
                 $user->advertiserProfile->update([
-                    'subscription_plan' => $plan->slug ?? $plan->name,
                     'subscription_active' => true,
                     'subscription_start_date' => $startsAt,
                     'subscription_end_date' => $expiresAt,

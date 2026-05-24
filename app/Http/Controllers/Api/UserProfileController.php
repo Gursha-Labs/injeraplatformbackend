@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -12,20 +14,20 @@ class UserProfileController extends Controller
     public function show(Request $request)
     {
         $user = $request->user();
-    
+
         if (!$user->isUser()) {
             return response()->json(['error' => 'Access denied'], 403);
         }
-    
+
         // Ensure profile exists
         $profile = $user->userProfile ?? $user->userProfile()->create();
-    
+
         if ($profile->points_balance != $user->points) {
             $profile->update([
                 'points_balance' => $user->points
             ]);
         }
-    
+
         return response()->json([
             'profile' => $profile->fresh()
         ]);
@@ -100,6 +102,48 @@ class UserProfileController extends Controller
 
         return response()->json([
             'message' => 'Profile picture deleted successfully'
+        ]);
+    }
+
+
+    public function delete_account(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        if (!$user->isUser() && !$user->isAdvertiser()) {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        $filesToDelete = [];
+
+        if ($user->isUser() && $user->userProfile) {
+            if ($user->userProfile->profile_picture) {
+                $filesToDelete[] = $user->userProfile->profile_picture;
+            }
+        }
+
+        if ($user->isAdvertiser() && $user->advertiserProfile) {
+            foreach (['logo', 'profile_picture', 'cover_image'] as $field) {
+                if (!empty($user->advertiserProfile->{$field})) {
+                    $filesToDelete[] = $user->advertiserProfile->{$field};
+                }
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->delete();
+        });
+
+        foreach (array_unique($filesToDelete) as $path) {
+            Storage::disk('public')->delete($path);
+        }
+
+        return response()->json([
+            'message' => 'Account deleted successfully'
         ]);
     }
 }
