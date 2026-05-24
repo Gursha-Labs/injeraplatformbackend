@@ -283,6 +283,7 @@ class AdminController extends Controller
             'password' => bcrypt($validated['password']),
             'type' => 'payment_processor',
             'points' => 0,
+            'email_verified_at' => now(),
             'is_blocking' => false,
             'last_active_at' => now(),
         ]);
@@ -374,6 +375,7 @@ class AdminController extends Controller
             'username' => ['sometimes', 'string', Rule::unique('users', 'username')->ignore($paymentProcessor->id)],
             'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($paymentProcessor->id)],
             'password' => ['sometimes', 'nullable', 'min:8'],
+            
         ];
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -423,6 +425,33 @@ class AdminController extends Controller
             'success' => true,
             'message' => 'Payment processor updated successfully',
             'data' => $paymentProcessor
+        ], 200);
+    }
+
+
+    public function income_for_the_system()
+    {
+        $admin = Auth::user();
+
+        if (!$admin || $admin->type !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied'
+            ], 403);
+        }
+
+        $totalIncome = DB::table('user_subscriptions as us')
+            ->join('subscriptions as s', 'us.subscription_id', '=', 's.id')
+            ->selectRaw("COALESCE(SUM(CASE
+                WHEN us.amount_paid IS NOT NULL AND us.amount_paid > 0 THEN us.amount_paid
+                WHEN us.status IN ('active', 'expired', 'cancelled') THEN s.price
+                ELSE 0
+            END), 0) as total_income")
+            ->value('total_income');
+
+        return response()->json([
+            'success' => true,
+            'total_income' => $totalIncome
         ], 200);
     }
 }
