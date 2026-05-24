@@ -9,24 +9,24 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    // public function up(): void
-    // {
-    //     Schema::table('ad_videos', function (Blueprint $table) {
-    //         $table->uuid('category_id')->nullable()->after('advertiser_id');
-    //         $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
-    //         //
-    //     });
-    // }
+     public function up(): void
+     {
+         Schema::table('ad_videos', function (Blueprint $table) {
+             $table->uuid('category_id')->nullable()->after('advertiser_id');
+             $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
+             //
+         });
+     }
 
     /**
      * Reverse the migrations.
      */
-    // public function down(): void
-    // {
-    //     Schema::table('ad_videos', function (Blueprint $table) {
-    //         $table->dropForeign(['category_id']);
-    //         $table->dropColumn('category_id');
-    //         //
-    //     });
-    // }
+     public function down(): void
+     {
+         Schema::table('ad_videos', function (Blueprint $table) {
+             $table->dropForeign(['category_id']);
+             $table->dropColumn('category_id');
+             //
+         });
+     }
 };
