@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('product_variants', function (Blueprint $table) {
-            $table->uuid()->primary();
+            $table->uuid('id')->primary();
             $table->uuid('video_id');
             $table->foreign('video_id')->references('id')->on('ad_videos')->onDelete('cascade');
             $table->json("image")->nullable();

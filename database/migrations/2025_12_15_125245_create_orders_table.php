@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('orders', function (Blueprint $table) {
-            $table->uuid();
+            $table->uuid('id')->primary();
             $table->string('user_id');
             $table->uuid('video_id');
             $table->foreign('video_id')->references('id')->on('ad_videos')->onDelete('cascade');
